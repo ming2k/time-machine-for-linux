@@ -1,6 +1,13 @@
 #!/bin/bash
 
-# 默认排除的文件和目录
+# load the lib
+for file in lib/*.sh; do
+    if [ -f "$file" ]; then
+        . "$file"
+    fi
+done
+
+# 备份排除列表（系统级）
 exclude_list=(
   "/proc/*"
   "/sys/*"
@@ -12,29 +19,11 @@ exclude_list=(
   "/lost+found"
 )
 
+# 备份排除列表（用户级）
 # 不建议排除用户的所有cache，因为它可能保存重要内容
 exclude_user_list+=(
-  ".cache/httpdirfs"
+  # ".cache/httpdirfs"
 )
-
-# 函数显示帮助信息
-show_help() {
-  echo "Usage: $0 [OPTIONS] BACKUP_PATH"
-  echo "Backup the Linux system using rsync."
-  echo
-  echo "Options:"
-  echo "  -h, --help    Display this help and exit."
-  echo
-  echo "Arguments:"
-  echo "  BACKUP_PATH    Specify the backup destination path."
-  exit 0
-}
-
-# 函数显示错误信息并退出
-show_error() {
-  echo -e "\e[91mError: $1\e[0m"
-  exit 1
-}
 
 # 解析命令行选项
 while [[ $# -gt 0 ]]; do
@@ -70,7 +59,8 @@ done
 echo "\"sudo rsync -avxHAX --numeric-ids $exclude_options / "$backup_path"\" will be executed!"
 read -p "Do you want to continue? (y/N) " confirm
 if [[ ! $confirm =~ ^[Yy]$ ]]; then
-  show_error "Backup operation canceled by user."
+  log error "Backup operation canceled by user."
+  exit 1
 fi
 
 current_date=$(date +"%Y%m%d")
@@ -80,12 +70,13 @@ IFS=':' read -r hours minutes seconds <<< "$current_time"
 seconds_since_midnight=$((hours * 3600 + minutes * 60 + seconds))
 
 # 执行备份命令
-if sudo rsync -avxHAX --numeric-ids $exclude_options / "$backup_path"; then
+# -v verbose
+# -q quite
+if sudo rsync -avxHAX --numeric-ids  --delete --checksum $exclude_options / "$backup_path"; then
   echo "Backup is completed."
   # 创建快照
-  sudo btrfs subvolume snapshot -r $backup_path $(dirname $backup_path)/backup-$current_date-$seconds_since_midnigh
-  echo "Snapshot is created."
+  sudo btrfs subvolume snapshot -r $backup_path $(dirname $backup_path)/backup-snapshot-$current_date-$seconds_since_midnight && echo "Snapshot is created."
 else
-  show_error "Backup failed. Please check the error message above."
+  log error "Backup failed. Please check the error message above."
 fi
 
