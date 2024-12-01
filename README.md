@@ -1,4 +1,4 @@
-# Linux 时光机器
+# Linux Time Machine
 
 ## Prerequisite
 
@@ -7,20 +7,21 @@ The File System of backup media require `btrfs`.
 The following structure is recommended:
 
 ```txt
-/mnt/backup/
+/mnt
 ├── @root         # Root filesystem backup
-├── @home         # Home directory backup  
 ├── @snapshots    # Location for storing snapshots
 └── @data         # General data backup
 ```
 
 
-## How to Use It
+## How to use it
 
 Basic usage:
 
 ```sh
-sudo system-backup /path/to/source /path/to/backup [/path/to/snapshots]
+sudo ./backup.sh /path/to/source /path/to/backup [/path/to/snapshots]
+# for example
+# sudo ./backup.sh /mnt/@root /mnt/external/system_backup
 ```
 
 **跟随的是存储介质下的 `subvolume` 目录，而不是根目录！**
