@@ -250,8 +250,8 @@ if [ $BACKUP_EXIT_CODE -eq 0 ]; then
             log_msg "SUCCESS" "Backup snapshot created successfully"
             
             # Clean up old snapshots (keep last 5)
-            log_msg "STEP" "Cleaning up old snapshots"
-            ls -dt "${SNAPSHOT_DIR}"/backup_* | tail -n +6 | xargs -r btrfs subvolume delete
+            # log_msg "STEP" "Cleaning up old snapshots"
+            # ls -dt "${SNAPSHOT_DIR}"/backup_* | tail -n +6 | xargs -r btrfs subvolume delete
         else
             log_msg "ERROR" "Failed to create backup snapshot"
         fi
