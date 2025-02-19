@@ -1,0 +1,41 @@
+# System paths and mount points
+/proc/*
+/proc/.*
+/sys/*
+/sys/.*
+/tmp/*
+/tmp/.*
+/run/*
+/run/.*
+/mnt/*
+/mnt/.*
+/media/*
+/media/.*
+/dev/*
+/dev/.*
+/lost+found
+
+# System backup and log directories
+/backup/*
+/backup/.*
+/var/log/*
+/var/log/.*
+/var/cache/*
+/var/cache/.*
+/var/tmp/*
+/var/tmp/.*
+
+# User cache directories
+/home/*/.cache/*
+/home/*/.cache/.*
+/root/.cache/*
+/root/.cache/.*
+
+# User specific directories
+/home/*/Downloads/*
+/home/*/Downloads/.*
+/home/*/pacman-pkg/build/*
+/home/*/pacman-pkg/build/.*
+/home/*/arch-pkg/*
+/home/*/arch-pkg/.*
+

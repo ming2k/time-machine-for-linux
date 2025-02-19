@@ -1,0 +1,55 @@
+# # Cache Directories
+# home/*/cache
+# home/*/.cache
+# home/*/.local/share/Trash
+# home/*/.mozilla/*/Cache
+# home/*/.config/chromium/*/Cache
+# home/*/.config/google-chrome/*/Cache
+# home/*/.config/*/Cache
+# 
+# # Package Manager Caches
+# home/*/.npm/_cacache
+# home/*/.cargo/registry
+# home/*/.gradle/caches
+# home/*/.m2/repository
+# home/*/.composer/cache
+# home/*/.yarn/cache
+# 
+# # Build and Dependency Directories
+# home/*/node_modules
+# home/*/**/__pycache__
+# home/*/target
+# home/*/build
+# home/*/dist
+# 
+# # Container and VM Related
+# home/*/.local/share/containers
+# home/*/.docker
+# home/*/.vagrant
+# home/*/.local/share/Steam
+# home/*/.wine
+# 
+# # Temporary Files and Directories
+# home/*/Downloads
+# home/*/tmp
+# home/*/*.tmp
+# home/*/*.temp
+# home/*/*.swp
+# home/*/*.swo
+# 
+# # IDE and Editor Specific
+# home/*/.vscode/extensions
+# home/*/.idea
+# home/*/.eclipse
+# 
+# # Development Files
+# home/*/**/*.pyc
+# home/*/**/*.pyo
+# home/*/.tox
+# home/*/.pytest_cache
+# 
+# # Browser Specific
+# home/*/.config/*/GPUCache
+# home/*/.config/*/CacheStorage
+# home/*/.config/*/Code Cache
+# home/*/.mozilla/*/storage
