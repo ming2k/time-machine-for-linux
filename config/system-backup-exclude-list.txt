@@ -25,17 +25,25 @@
 /var/tmp/*
 /var/tmp/.*
 
+/snapshots/*
+/snapshots/.*
+
 # User cache directories
 /home/*/.cache/*
 /home/*/.cache/.*
+/home/*/.local/share/Trash/*
+/home/*/.local/share/Trash/.*
 /root/.cache/*
 /root/.cache/.*
 
 # User specific directories
 /home/*/Downloads/*
 /home/*/Downloads/.*
-/home/*/pacman-pkg/build/*
-/home/*/pacman-pkg/build/.*
-/home/*/arch-pkg/*
-/home/*/arch-pkg/.*
+/home/*/pacman-pkgbuild/build/*
+/home/*/pacman-pkgbuild/build/.*
 
+/home/*/games/*
+/home/*/games/.*
+
+/home/*/isos/*
+/home/*/isos/.*

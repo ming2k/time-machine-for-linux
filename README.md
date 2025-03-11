@@ -13,13 +13,12 @@ The following structure is recommended:
 └── @data         # General data backup
 ```
 
-
 ## How to use it
 
 Basic usage:
 
 ```sh
-sudo ./backup.sh /path/to/source /path/to/backup [/path/to/snapshots]
+sudo ./system-backup.sh /path/to/source /path/to/backup [/path/to/snapshots]
 # for example
 # sudo ./backup.sh /mnt/@root /mnt/external/system_backup
 ```
@@ -65,3 +64,9 @@ Restore command that you can use:
 ```sh
 sudo rsync -avxHAX --numeric-ids --delete --checksum /path/to/backup/partition/backup  /path/to/backup/partition/restore
 ```
+
+WARN:
+When using rsync, you need to be careful about how you write the paths. There's an important difference between rsync -a A B and rsync -a A/ B. The first command will put directory A inside B, so you'll end up with your files in B/A. But if you add that slash after A, like rsync -a A/ B, it will copy just the contents of A into B directly. Also, when you want to exclude something, writing --exclude=C does the same thing as --exclude=C/ - both will skip the directory C and everything in it.
+
+
+

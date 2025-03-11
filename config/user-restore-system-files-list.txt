@@ -35,6 +35,7 @@
 /etc/NetworkManager/system-connections
 /etc/wpa_supplicant
 /etc/netplan
+/etc/dae
 
 # Package Management
 /etc/apt/sources.list
@@ -43,6 +44,9 @@
 /etc/pacman.d
 /etc/yum.repos.d
 /etc/dnf/dnf.conf
+
+# kernel update for archlinux
+/usr/local/bin/update-kernel*.sh
 
 # Service Configuration
 /etc/ssh/ssh_config
@@ -63,3 +67,4 @@
 /etc/locale.gen
 /etc/localtime
 /etc/timezone
+

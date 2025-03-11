@@ -275,7 +275,7 @@ if [ $BACKUP_EXIT_CODE -eq 0 ]; then
     log_msg "SUCCESS" "Backup completed successfully"
     
     if [ -n "$SNAPSHOT_DIR" ]; then
-        SNAPSHOT_PATH="${SNAPSHOT_DIR}/backup_${DATE}"
+        SNAPSHOT_PATH="${SNAPSHOT_DIR}backup_${DATE}"
         log_msg "STEP" "Creating backup snapshot at ${BOLD}$SNAPSHOT_PATH${NC}"
         
         if btrfs subvolume snapshot -r "$BACKUP_DIR" "$SNAPSHOT_PATH"; then
@@ -289,8 +289,8 @@ else
 fi
 
 # Calculate and display backup size
-BACKUP_SIZE=$(du -sh "$BACKUP_DIR" | cut -f1)
-log_msg "INFO" "Final backup size: ${BOLD}${BACKUP_SIZE}${NC}"
+# BACKUP_SIZE=$(du -sh "$BACKUP_DIR" | cut -f1)
+# log_msg "INFO" "Final backup size: ${BOLD}${BACKUP_SIZE}${NC}"
 
 # Print footer
 echo -e "\n${BOLD}${BLUE}═══════════════════════════════════════════════════${NC}"
