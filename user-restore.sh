@@ -10,8 +10,6 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m' # No Color
 
-# Log file path
-LOG_FILE="/var/log/user-restore.log"
 CONFIG_DIR="$(dirname "$0")/config"
 
 # Log message with timestamp and appropriate emoji
@@ -27,7 +25,7 @@ log_msg() {
         "SUCCESS") color=$GREEN; prefix="✅ ";;
         "STEP") color=$CYAN; prefix="🔄 ";;
     esac
-    echo -e "${color}${prefix}[$(date '+%Y-%m-%d %H:%M:%S')] ${msg}${NC}" | tee -a "$LOG_FILE"
+    echo -e "${color}${prefix}[$(date '+%Y-%m-%d %H:%M:%S')] ${msg}${NC}"
 }
 
 # Check if user exists in the system
@@ -293,10 +291,6 @@ generate_exclude_list "$BACKUP_DIR" "$USERNAME"
 
 # Ask for confirmation before proceeding
 confirm_execution "$BACKUP_DIR" "$USERNAME"
-
-# Start logging
-exec 1> >(tee -a "$LOG_FILE")
-exec 2>&1
 
 log_msg "INFO" "Starting restore process"
 

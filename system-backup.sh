@@ -170,7 +170,6 @@ SOURCE_DIR="$1"
 BACKUP_DIR="$2"
 SNAPSHOT_DIR="$3"
 
-LOG_FILE="/var/log/backup.log"
 DATE=$(date +%Y-%m-%d_%H-%M-%S)
 
 # Check if running as root
@@ -206,10 +205,6 @@ generate_exclude_list "$SOURCE_DIR"
 
 # Ask for confirmation before proceeding
 confirm_execution "$SOURCE_DIR" "$BACKUP_DIR" "$SNAPSHOT_DIR"
-
-# Start logging
-exec 1> >(tee -a "$LOG_FILE")
-exec 2>&1
 
 log_msg "INFO" "Backup process initiated"
 log_msg "INFO" "System root: ${BOLD}$SOURCE_DIR${NC}"
@@ -287,10 +282,6 @@ if [ $BACKUP_EXIT_CODE -eq 0 ]; then
 else
     log_msg "ERROR" "Backup failed with exit code $BACKUP_EXIT_CODE"
 fi
-
-# Calculate and display backup size
-# BACKUP_SIZE=$(du -sh "$BACKUP_DIR" | cut -f1)
-# log_msg "INFO" "Final backup size: ${BOLD}${BACKUP_SIZE}${NC}"
 
 # Print footer
 echo -e "\n${BOLD}${BLUE}═══════════════════════════════════════════════════${NC}"
