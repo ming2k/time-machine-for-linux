@@ -29,7 +29,7 @@ A comprehensive backup solution for Linux systems, providing functionality simil
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/ming2k/time-machine-for-linux-script.git
+git clone https://github.com/ming2k/time-machine-for-linux.git
 cd time-machine-for-linux-script
 ```
 
