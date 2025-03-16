@@ -1,49 +1,23 @@
 #!/bin/bash
 
-# Colors and formatting
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-MAGENTA='\033[0;35m'
-CYAN='\033[0;36m'
-BOLD='\033[1m'
-NC='\033[0m' # No Color
+# Get project paths
+SCRIPT_PATH="$(readlink -f "$0")"
+PROJECT_ROOT="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
+LIB_DIR="${PROJECT_ROOT}/lib"
+CONFIG_DIR="${PROJECT_ROOT}/config"
 
-# BTRFS utility functions
-# Check if the given path is on a BTRFS filesystem
-is_btrfs_filesystem() {
-    local path="$1"
-    if [ -d "$path" ]; then
-        local fstype=$(stat -f -c %T "$path")
-        [ "$fstype" = "btrfs" ]
-        return $?
-    fi
-    return 1
-}
+# Load libraries
+source "${LIB_DIR}/lib-loader.sh"
+if ! load_backup_libs "$LIB_DIR"; then
+    echo "Failed to load required libraries" >&2
+    exit 1
+fi
 
-# Check if the given path is a BTRFS subvolume
-is_btrfs_subvolume() {
-    local path="$1"
-    btrfs subvolume show "$path" >/dev/null 2>&1
-    return $?
-}
-
-# Log message with timestamp and appropriate emoji
-log_msg() {
-    local level=$1
-    local msg=$2
-    local color=$NC
-    local prefix=""
-    case $level in
-        "INFO") color=$GREEN; prefix="ℹ️ ";;
-        "WARNING") color=$YELLOW; prefix="⚠️ ";;
-        "ERROR") color=$RED; prefix="❌ ";;
-        "SUCCESS") color=$GREEN; prefix="✅ ";;
-        "STEP") color=$CYAN; prefix="🔄 ";;
-    esac
-    echo -e "${color}${prefix}[$(date '+%Y-%m-%d %H:%M:%S')] ${msg}${NC}"
-}
+# Validate configs
+if ! validate_backup_config "$CONFIG_DIR" "system"; then
+    log_msg "ERROR" "Invalid configuration"
+    exit 1
+fi
 
 # Check if path is a valid system root by verifying essential directories and files
 is_valid_system_root() {
@@ -73,8 +47,8 @@ is_valid_system_root() {
 # Generate exclude list from config file
 generate_exclude_list() {
     local source_path="$1"
-    local config_dir="$(dirname "$0")/config"
-    local exclude_config="$config_dir/system-backup-exclude-list.txt"
+    local config_dir="$CONFIG_DIR"
+    local exclude_config="${config_dir}/backup/system-exclude.conf"
     
     # Check if exclude config exists
     if [ ! -f "$exclude_config" ]; then
@@ -148,27 +122,40 @@ confirm_execution() {
 
 # Display usage information
 usage() {
-    echo -e "${BOLD}Usage:${NC} $0 <source_dir> <backup_dir> [snapshot_dir]"
+    echo -e "${BOLD}Usage:${NC} $0 <source_dir> <backup_dir> <snapshot_dir>"
     echo -e "${BOLD}Example:${NC} $0 /mnt /mnt/@backup /mnt/@backup_snapshots"
     echo
     echo -e "${BOLD}Arguments:${NC}"
-    echo " source_dir   : Source system root directory to backup"
-    echo " backup_dir   : Destination directory for backup"
-    echo " snapshot_dir : (Optional) Directory to store backup snapshots"
+    echo " source_dir   : Source directory to backup (root filesystem)"
+    echo " backup_dir   : Destination directory for backup (must be on BTRFS)"
+    echo " snapshot_dir : Directory for storing snapshots (must be on BTRFS)"
     echo
     echo -e "${BOLD}Note:${NC} The source directory must be a valid system root containing"
     echo "      essential system directories and files (etc, usr, bin, etc.)"
     exit 1
 }
 
-# Parse command line arguments
-if [ $# -lt 2 ] || [ $# -gt 3 ]; then
-    usage
+# Check arguments
+if [ $# -ne 3 ]; then
+    log_msg "ERROR" "Usage: $0 <source_path> <backup_path> <snapshot_path>"
+    log_msg "INFO" "Both backup_path and snapshot_path must be on BTRFS filesystem"
+    exit 1
 fi
 
 SOURCE_DIR="$1"
 BACKUP_DIR="$2"
 SNAPSHOT_DIR="$3"
+
+# Verify BTRFS requirements
+if ! is_btrfs_filesystem "$BACKUP_DIR"; then
+    log_msg "ERROR" "Backup destination must be on a BTRFS filesystem"
+    exit 1
+fi
+
+if ! is_btrfs_filesystem "$SNAPSHOT_DIR"; then
+    log_msg "ERROR" "Snapshot path must be on a BTRFS filesystem"
+    exit 1
+fi
 
 DATE=$(date +%Y-%m-%d_%H-%M-%S)
 
@@ -238,9 +225,10 @@ if [ -n "$SNAPSHOT_DIR" ]; then
         exit 1
     fi
     
-    if [ ! -d "$SNAPSHOT_DIR" ]; then
-        log_msg "STEP" "Creating snapshot directory"
-        mkdir -p "$SNAPSHOT_DIR"
+    # Check snapshot directory
+    if ! check_directory "$SNAPSHOT_DIR"; then
+        log_msg "ERROR" "Invalid snapshot directory: $SNAPSHOT_DIR"
+        exit 1
     fi
 fi
 
@@ -255,6 +243,16 @@ echo -e "Available space: ${BOLD}$(numfmt --to=iec-i --suffix=B $((AVAILABLE_SPA
 if [ "$AVAILABLE_SPACE" -lt "$REQUIRED_SPACE" ]; then
     log_msg "ERROR" "Not enough space in backup directory!"
     exit 1
+fi
+
+# Before starting backup
+if [ -n "$SNAPSHOT_DIR" ]; then
+    log_msg "STEP" "Creating safety snapshots"
+    TIMESTAMP=$(create_safety_snapshots "$BACKUP_DIR" "$SNAPSHOT_DIR" "system")
+    if [ $? -ne 0 ]; then
+        log_msg "WARNING" "Failed to create safety snapshots, proceeding without protection"
+        TIMESTAMP=""
+    fi
 fi
 
 # Perform the backup using exclude-from
@@ -281,6 +279,14 @@ if [ $BACKUP_EXIT_CODE -eq 0 ]; then
     fi
 else
     log_msg "ERROR" "Backup failed with exit code $BACKUP_EXIT_CODE"
+fi
+
+# After successful backup
+if [ $BACKUP_EXIT_CODE -eq 0 ] && [ -n "$TIMESTAMP" ]; then
+    create_post_snapshot "$BACKUP_DIR" "$SNAPSHOT_DIR" "system" "$TIMESTAMP"
+    
+    # Cleanup old snapshots (keep last 5)
+    cleanup_old_snapshots "$SNAPSHOT_DIR" "system" 5
 fi
 
 # Print footer

@@ -1,5 +1,28 @@
 #!/bin/bash
 
+# Get project paths
+SCRIPT_PATH="$(readlink -f "$0")"
+PROJECT_ROOT="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
+LIB_DIR="${PROJECT_ROOT}/lib"
+CONFIG_DIR="${PROJECT_ROOT}/config"
+
+# Update config file paths - move these near the top with other configs
+EXCLUDE_CONFIG="${CONFIG_DIR}/restore/exclude.conf"
+SYSFILES_CONFIG="${CONFIG_DIR}/restore/system-files.conf"
+
+# Load libraries
+source "${LIB_DIR}/lib-loader.sh"
+if ! load_backup_libs "$LIB_DIR"; then
+    echo "Failed to load required libraries" >&2
+    exit 1
+fi
+
+# Validate configs
+if ! validate_backup_config "$CONFIG_DIR"; then
+    log_msg "ERROR" "Invalid configuration"
+    exit 1
+fi
+
 # Colors and formatting
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -9,8 +32,6 @@ MAGENTA='\033[0;35m'
 CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m' # No Color
-
-CONFIG_DIR="$(dirname "$0")/config"
 
 # Log message with timestamp and appropriate emoji
 log_msg() {

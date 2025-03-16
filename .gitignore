@@ -1,0 +1,17 @@
+# Temporary files
+*.tmp
+*~
+*.swp
+*.swo
+
+# Backup files
+*.bak
+*.backup
+
+# Test files
+tests/fixtures/*
+!tests/fixtures/.gitkeep
+
+# System files
+.DS_Store
+Thumbs.db 

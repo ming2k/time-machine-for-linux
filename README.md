@@ -1,72 +1,208 @@
 # Linux Time Machine
 
-## Prerequisite
+A comprehensive backup solution for Linux systems, providing functionality similar to Apple's Time Machine. This project includes utilities for system backup, data backup, and user data restoration.
 
-The File System of backup media require `btrfs`. 
+## Features
 
-The following structure is recommended:
+- **System Backup**: Full system backup with BTRFS snapshots support
+- **Data Backup**: Configurable data backup with exclude patterns
+- **User Restore**: Selective restoration of user data and system configurations
+- **BTRFS Support**: Efficient snapshot management using BTRFS
+- **Flexible Configuration**: Easily customizable backup paths and exclusion patterns
 
-```txt
-/mnt
-├── @root         # Root filesystem backup
-├── @snapshots    # Location for storing snapshots
-└── @data         # General data backup
+## Prerequisites
+
+- Linux system with `rsync` installed
+- BTRFS filesystem for backup destination (recommended)
+- Root privileges for system operations
+
+### Recommended BTRFS Structure
+
+```
+/mnt/backup/
+├── @root      # System root backup
+├── @data      # General data backup
+└── @snapshots # Backup snapshots
 ```
 
-## How to use it
+## Installation
 
-Basic usage:
-
-```sh
-sudo ./system-backup.sh /path/to/source /path/to/backup [/path/to/snapshots]
-# for example
-# sudo ./backup.sh /mnt/@root /mnt/external/system_backup
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/linux-time-machine.git
+cd linux-time-machine
 ```
 
-**跟随的是存储介质下的 `subvolume` 目录，而不是根目录！**
-
----
-
-The following command may be helpful.
-
-Make btrfs filesystem:
-
-```sh
-sudo mkfs.btrfs /dev/partition
+2. Make scripts executable:
+```bash
+chmod +x bin/*.sh
 ```
 
-Create subvolume:
+## Usage
 
-```sh
-sudo btrfs subvolume create $PARTITION/backup
+### System Backup
+
+Backup the entire system with optional snapshots:
+
+```bash
+sudo ./bin/system-backup.sh <source_path> <backup_path> <snapshot_path>
 ```
 
-Change subvolume name(AKA. label):
+Requirements:
+- `source_path`: Root filesystem to backup
+- `backup_path`: Destination path on BTRFS filesystem
+- `snapshot_path`: Path for storing snapshots on BTRFS filesystem
 
-```sh
-sudo btrfs filesystem label /path/to/mounted/btrfs_volume new_label
+Example:
+```bash
+sudo ./bin/system-backup.sh / /mnt/backup/@root /mnt/backup/@snapshots
 ```
 
-Delete the snapshot:
+### Data Backup
 
-```sh
-sudo btrfs subvolume delete /path/to/snapshot
+Backup specified data directories according to configuration:
+
+```bash
+sudo ./bin/data-backup.sh <backup_path> <snapshot_path>
 ```
 
-The copy command used in the script:
+Both `backup_path` and `snapshot_path` must be on a BTRFS filesystem. The script will:
+1. Create a safety snapshot before backup
+2. Perform the backup operation
+3. Create a final snapshot if backup succeeds
+4. Clean up the pre-backup snapshot
+5. Keep the last 5 snapshots, removing older ones
 
-```sh
-sudo rsync -av	xHAX --numeric-ids --delete --checksum / /path/to/backup/partition/backup
+### User Data Restore
+
+Restore user data and system configurations:
+
+```bash
+sudo ./bin/user-restore.sh /path/to/backup username
 ```
 
-Restore command that you can use:
-
-```sh
-sudo rsync -avxHAX --numeric-ids --delete --checksum /path/to/backup/partition/backup  /path/to/backup/partition/restore
+Example:
+```bash
+sudo ./bin/user-restore.sh /mnt/backup/@root john
 ```
 
-WARN:
-When using rsync, you need to be careful about how you write the paths. There's an important difference between rsync -a A B and rsync -a A/ B. The first command will put directory A inside B, so you'll end up with your files in B/A. But if you add that slash after A, like rsync -a A/ B, it will copy just the contents of A into B directly. Also, when you want to exclude something, writing --exclude=C does the same thing as --exclude=C/ - both will skip the directory C and everything in it.
+## Configuration
 
+### Data Backup Maps
 
+Edit `config/data-backup-maps.txt` to configure source and destination paths:
+
+```
+# Format: source_path|destination_path|exclude_patterns
+/home/user/Documents|/documents|*.tmp,*.cache
+/var/www/html|/websites|.git,node_modules
+```
+
+### System Backup Exclusions
+
+Edit `config/system-backup-exclude-list.txt` to specify paths to exclude from system backup:
+
+```
+/proc/*
+/sys/*
+/tmp/*
+/run/*
+...
+```
+
+### User Restore Configuration
+
+- `config/user-restore-exclude-list.txt`: Patterns to exclude during user data restoration
+- `config/user-restore-system-files-list.txt`: System configuration files to restore
+
+## BTRFS Operations
+
+### Create BTRFS Filesystem
+
+```bash
+sudo mkfs.btrfs /dev/sdX
+```
+
+### Create Subvolumes
+
+```bash
+sudo mount /dev/sdX /mnt/backup
+sudo btrfs subvolume create /mnt/backup/@root
+sudo btrfs subvolume create /mnt/backup/@data
+sudo btrfs subvolume create /mnt/backup/@snapshots
+```
+
+### Manage Snapshots
+
+List snapshots:
+```bash
+sudo btrfs subvolume list /mnt/backup
+```
+
+Delete snapshot:
+```bash
+sudo btrfs subvolume delete /mnt/backup/@snapshots/snapshot-name
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a new Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Safety Note
+
+Always verify your backups and test the restoration process in a safe environment before relying on them for critical data.
+
+# Project Structure
+
+```
+linux-time-machine/
+├── bin/                    # Executable scripts
+├── lib/                    # Library modules
+│   ├── core/              # Core functionality
+│   ├── fs/                # Filesystem operations
+│   ├── config/            # Configuration handling
+│   ├── backup/            # Backup operations
+│   └── ui/                # User interface components
+├── config/                # Configuration files
+│   ├── backup/           # Backup configurations
+│   ├── restore/          # Restore configurations
+│   └── defaults/         # Default configurations
+├── tests/                 # Test suite
+│   ├── unit/             # Unit tests
+│   ├── integration/      # Integration tests
+│   └── fixtures/         # Test fixtures
+└── docs/                 # Documentation
+    ├── api/              # API documentation
+    └── examples/         # Usage examples
+```
+
+## Module Organization
+
+### Core Module
+- Basic utilities and shared functionality
+- Logging, colors, library loading
+
+### Filesystem Module
+- Filesystem operations and utilities
+- BTRFS-specific operations
+
+### Config Module
+- Configuration parsing and validation
+- Config file management
+
+### Backup Module
+- Backup operations and protection
+- Snapshot management
+
+### UI Module
+- User interface components
+- Progress display and user interaction
 
