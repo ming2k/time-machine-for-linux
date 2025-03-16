@@ -30,7 +30,7 @@ A comprehensive backup solution for Linux systems, providing functionality simil
 1. Clone the repository:
 ```bash
 git clone https://github.com/ming2k/time-machine-for-linux.git
-cd time-machine-for-linux-script
+cd time-machine-for-linux
 ```
 
 2. Make scripts executable:
