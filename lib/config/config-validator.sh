@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source "$(dirname "$0")/../core/logging.sh"
+source "${LIB_DIR}/core/logging.sh"
 
 # Validate config file existence and permissions
 validate_config_file() {

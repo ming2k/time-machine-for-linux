@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source "$(dirname "$0")/../core/logging.sh"
+source "${LIB_DIR}/core/logging.sh"
 
 # Parse backup maps configuration
 parse_backup_maps() {

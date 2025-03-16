@@ -1,19 +1,33 @@
 #!/bin/bash
 
-source "$(dirname "$0")/colors.sh"
+# Use absolute path from LIB_DIR
+source "${LIB_DIR}/core/colors.sh"
 
-# Log message with timestamp and appropriate emoji
+# Log message with timestamp and level
 log_msg() {
     local level=$1
     local msg=$2
     local color=$NC
-    local prefix=""
+    
     case $level in
-        "INFO") color=$GREEN; prefix="ℹ️ ";;
-        "WARNING") color=$YELLOW; prefix="⚠️ ";;
-        "ERROR") color=$RED; prefix="❌ ";;
-        "SUCCESS") color=$GREEN; prefix="✅ ";;
-        "STEP") color=$CYAN; prefix="🔄 ";;
+        "INFO") color=$NC;;
+        "WARNING") color=$YELLOW;;
+        "ERROR") color=$RED;;
+        "SUCCESS") color=$GREEN;;
     esac
-    echo -e "\n${color}${prefix}[$(date '+%Y-%m-%d %H:%M:%S')] ${msg}${NC}"
+    
+    # Format: [date] [level] message
+    echo -e "${color}[$(date '+%Y-%m-%d %H:%M:%S')] [${level}] ${msg}${NC}"
+}
+
+# Print raw message without timestamp and level (for special formatting)
+print_raw() {
+    local msg="$1"
+    echo -e "$msg"
+}
+
+# Print indented message with consistent formatting
+print_info() {
+    local msg="$1"
+    log_msg "INFO" "  ${msg}"
 } 

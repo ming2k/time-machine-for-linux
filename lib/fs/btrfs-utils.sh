@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source "$(dirname "$0")/../core/logging.sh"
+source "${LIB_DIR}/core/logging.sh"
 
 # Check if the given path is on a BTRFS filesystem
 is_btrfs_filesystem() {

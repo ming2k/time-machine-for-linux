@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source "$(dirname "$0")/../core/logging.sh"
+source "${LIB_DIR}/core/logging.sh"
 
 # Check if directory exists and is accessible
 check_directory() {
@@ -26,9 +26,9 @@ check_disk_space() {
     local required_space=$(df -k "$source_dir" | awk 'NR==2 {print $3}')
     local available_space=$(df -k "$dest_dir" | awk 'NR==2 {print $4}')
     
-    log_msg "STEP" "Checking disk space"
-    echo -e "Required space : ${BOLD}$(numfmt --to=iec-i --suffix=B $((required_space * 1024)))${NC}"
-    echo -e "Available space: ${BOLD}$(numfmt --to=iec-i --suffix=B $((available_space * 1024)))${NC}"
+    log_msg "INFO" "Disk space check:"
+    log_msg "INFO" "  Required space : $(numfmt --to=iec-i --suffix=B $((required_space * 1024)))"
+    log_msg "INFO" "  Available space: $(numfmt --to=iec-i --suffix=B $((available_space * 1024)))"
     
     if [ "$available_space" -lt "$required_space" ]; then
         log_msg "ERROR" "Not enough space in destination directory!"

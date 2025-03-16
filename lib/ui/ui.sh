@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source "$(dirname "$0")/../core/colors.sh"
+source "${LIB_DIR}/core/colors.sh"
 
 # Print header banner
 print_header() {

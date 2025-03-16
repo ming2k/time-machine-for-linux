@@ -130,84 +130,18 @@ create_exclude_file() {
     done
 }
 
-# Create a safety snapshot at the specified path with timestamp
-create_safety_snapshot() {
-    local backup_dest_path="$1"
-    local snapshot_base_path="$2"
-    
-    if [ -z "$snapshot_base_path" ]; then
-        # No snapshot path specified, skip snapshot
-        return 0
-    fi
-    
-    # Create timestamped directory name
-    local timestamp=$(date +%Y-%m-%d_%H-%M-%S)
-    local snapshot_dir="${snapshot_base_path}/date-${timestamp}"
-    
-    log_msg "STEP" "Creating safety snapshot at: ${snapshot_dir}"
-    
-    # Create the snapshot directory if it doesn't exist
-    mkdir -p "$snapshot_dir"
-    
-    # Use rsync to make a mirror of current state
-    rsync -aAXh --quiet "${backup_dest_path}/" "${snapshot_dir}/"
-    
-    local rsync_status=$?
-    if [ $rsync_status -eq 0 ]; then
-        log_msg "SUCCESS" "Safety snapshot created at: $snapshot_dir"
-        echo "$snapshot_dir"
-    else
-        log_msg "WARNING" "Failed to create complete safety snapshot"
-        echo ""
-    fi
-}
-
-# Perform backup for a single source-destination pair in regular mode
-perform_regular_backup() {
-    local src="$1"
-    local dst="$2"
-    local exclude_file="$3"
-    local backup_number="$4"
-    local total_backups="$5"
-    
-    log_msg "STEP" "[$backup_number/$total_backups] Backing up: $src -> $dst"
-    
-    # Create destination directory if it doesn't exist
-    mkdir -p "$dst"
-    
-    # Perform rsync backup with --update flag instead of --delete to avoid overwriting newer files
-    if [ -s "$exclude_file" ]; then
-        log_msg "INFO" "Using exclude patterns from config"
-        rsync -aAXhv --update --info=progress2 --exclude-from="$exclude_file" "$src/" "$dst/"
-    else
-        rsync -aAXhv --update --info=progress2 "$src/" "$dst/"
-    fi
-    
-    local rsync_status=$?
-    
-    if [ $rsync_status -eq 0 ]; then
-        log_msg "SUCCESS" "Backup completed successfully: $src -> $dst"
-    else
-        log_msg "ERROR" "Failed to backup: $src -> $dst (rsync exit code: $rsync_status)"
-    fi
-    
-    return $rsync_status
-}
-
 # Display backup operation details and ask for confirmation
 confirm_execution() {
     local backup_dest_path="$1"
     
-    echo -e "\n${BOLD}${YELLOW}═══════════════════════════════════════════════════${NC}"
-    echo -e "${BOLD}${YELLOW} DATA BACKUP CONFIRMATION${NC}"
-    echo -e "${BOLD}${YELLOW}═══════════════════════════════════════════════════${NC}\n"
+    print_header "DATA BACKUP CONFIRMATION"
     
     echo -e "${BOLD}The following backup operations will be performed:${NC}\n"
     
     echo -e "${CYAN}Backup Destination Path:${NC} ${BOLD}$backup_dest_path${NC}"
     
     if [ -n "$SNAPSHOT_PATH" ]; then
-        echo -e "${CYAN}Safety Snapshot Base:${NC} ${BOLD}$SNAPSHOT_PATH/date-$(date +%Y-%m-%d-%H-%M-%S)${NC}"
+        echo -e "${CYAN}Safety Snapshot Base:${NC} ${BOLD}$SNAPSHOT_PATH${NC}"
     else
         echo -e "${CYAN}Safety Snapshot:${NC} ${BOLD}None${NC}"
     fi
@@ -244,9 +178,8 @@ usage() {
     echo -e "${BOLD}Usage:${NC} $0 <backup_path> <snapshot_path>"
     echo
     echo -e "${BOLD}Arguments:${NC}"
-    echo " backup_path   : Backup destination mount point (e.g., /mnt/foo, /mnt/bar)"
+    echo " backup_path   : Backup destination mount point"
     echo " snapshot_path : Base path for creating a timestamped safety snapshot"
-    echo "                 A directory named 'date-YYYY-MM-DD_HH-MM-SS' will be created here"
     echo
     echo -e "${BOLD}Features:${NC}"
     echo " • If snapshot_path is provided, a timestamped safety snapshot is created"
@@ -257,6 +190,38 @@ usage() {
     echo " $0 /mnt/backup_drive                 # Regular backup without snapshot"
     echo " $0 /mnt/backup_drive /mnt/snapshots  # Create timestamped snapshot before backup"
     exit 1
+}
+
+# Perform backup for a single source-destination pair
+perform_backup() {
+    local src="$1"
+    local dst="$2"
+    local exclude_file="$3"
+    local backup_number="$4"
+    local total_backups="$5"
+    
+    log_msg "STEP" "[$backup_number/$total_backups] Backing up: $src -> $dst"
+    
+    # Create destination directory if it doesn't exist
+    mkdir -p "$dst"
+    
+    # Perform rsync backup with --update flag
+    if [ -s "$exclude_file" ]; then
+        log_msg "INFO" "Using exclude patterns from config"
+        rsync -aAXhv --update --info=progress2 --exclude-from="$exclude_file" "$src/" "$dst/"
+    else
+        rsync -aAXhv --update --info=progress2 "$src/" "$dst/"
+    fi
+    
+    local rsync_status=$?
+    
+    if [ $rsync_status -eq 0 ]; then
+        log_msg "SUCCESS" "Backup completed successfully: $src -> $dst"
+    else
+        log_msg "ERROR" "Failed to backup: $src -> $dst (rsync exit code: $rsync_status)"
+    fi
+    
+    return $rsync_status
 }
 
 # Main script starts here
@@ -275,26 +240,13 @@ BACKUP_DEST_PATH="$1"
 SNAPSHOT_PATH="$2"
 
 # Verify BTRFS requirements
-if ! is_btrfs_filesystem "$BACKUP_DEST_PATH"; then
-    log_msg "ERROR" "Backup destination must be on a BTRFS filesystem"
-    exit 1
-fi
-
-if ! is_btrfs_filesystem "$SNAPSHOT_PATH"; then
-    log_msg "ERROR" "Snapshot path must be on a BTRFS filesystem"
-    exit 1
-fi
-
-# Verify backup directory is a subvolume
-if ! is_btrfs_subvolume "$BACKUP_DEST_PATH"; then
-    log_msg "ERROR" "Backup destination must be a BTRFS subvolume"
+if ! is_btrfs_filesystem "$BACKUP_DEST_PATH" || ! is_btrfs_filesystem "$SNAPSHOT_PATH"; then
+    log_msg "ERROR" "Backup and snapshot paths must be on BTRFS filesystems"
     exit 1
 fi
 
 # Print header
-echo -e "\n${BOLD}${BLUE}═══════════════════════════════════════════════════${NC}"
-echo -e "${BOLD}${BLUE} DATA BACKUP UTILITY${NC}"
-echo -e "${BOLD}${BLUE}═══════════════════════════════════════════════════${NC}\n"
+print_header "DATA BACKUP UTILITY"
 
 # Initialize arrays for sources and destinations
 declare -a SOURCES=()
@@ -308,28 +260,18 @@ parse_config
 # Ask for confirmation before proceeding
 confirm_execution "$BACKUP_DEST_PATH"
 
-log_msg "INFO" "Starting backup process"
+# Create temporary exclude file
+TEMP_EXCLUDE_FILE=$(mktemp)
+trap 'rm -f "$TEMP_EXCLUDE_FILE"' EXIT
 
-# Before starting backup operations
+# Perform backups
+TOTAL_BACKUPS=${#SOURCES[@]}
+SUCCESS_COUNT=0
+FAILURE_COUNT=0
+
+# Create safety snapshot if path provided
 if [ -n "$SNAPSHOT_PATH" ]; then
     log_msg "STEP" "Creating safety snapshots"
-    
-    # Verify snapshot path
-    if [ ! -d "$SNAPSHOT_PATH" ]; then
-        log_msg "STEP" "Creating snapshot directory: $SNAPSHOT_PATH"
-        if ! mkdir -p "$SNAPSHOT_PATH"; then
-            log_msg "ERROR" "Failed to create snapshot directory"
-            exit 1
-        fi
-    fi
-    
-    # Verify BTRFS requirements for snapshot path
-    if ! is_btrfs_filesystem "$SNAPSHOT_PATH"; then
-        log_msg "ERROR" "Snapshot path must be on a BTRFS filesystem"
-        exit 1
-    fi
-    
-    # Store timestamp in a more reliable way
     TIMESTAMP=$(date +%Y-%m-%d-%H-%M-%S)
     if ! create_safety_snapshots "$BACKUP_DEST_PATH" "$SNAPSHOT_PATH" "data"; then
         log_msg "WARNING" "Failed to create safety snapshots, proceeding without protection"
@@ -337,67 +279,37 @@ if [ -n "$SNAPSHOT_PATH" ]; then
     fi
 fi
 
-# Create temporary exclude file
-TEMP_EXCLUDE_FILE=$(mktemp)
-trap 'rm -f "$TEMP_EXCLUDE_FILE"' EXIT
-
-# Perform regular backups - process each source-destination pair
-TOTAL_BACKUPS=${#SOURCES[@]}
-SUCCESS_COUNT=0
-FAILURE_COUNT=0
-
+# Process each backup operation
 for i in "${!SOURCES[@]}"; do
     src="${SOURCES[$i]}"
     dst=$(get_backup_dest "${DESTINATIONS[$i]}" "$BACKUP_DEST_PATH")
     excludes="${EXCLUDES[$i]}"
     
-    # Create exclude file
     create_exclude_file "$excludes" "$TEMP_EXCLUDE_FILE"
     
-    # Perform backup
-    if perform_regular_backup "$src" "$dst" "$TEMP_EXCLUDE_FILE" "$((i+1))" "$TOTAL_BACKUPS"; then
+    if perform_backup "$src" "$dst" "$TEMP_EXCLUDE_FILE" "$((i+1))" "$TOTAL_BACKUPS"; then
         ((SUCCESS_COUNT++))
     else
         ((FAILURE_COUNT++))
     fi
 done
 
+# Create final snapshot and show results
 if [ $FAILURE_COUNT -eq 0 ]; then
-    EXIT_CODE=0
-else
-    EXIT_CODE=1
-fi
-
-log_msg "INFO" "Backup summary: $SUCCESS_COUNT succeeded, $FAILURE_COUNT failed (total: $TOTAL_BACKUPS)"
-
-# Print footer
-echo -e "\n${BOLD}${BLUE}═══════════════════════════════════════════════════${NC}"
-echo -e "${BOLD}${GREEN} BACKUP PROCESS COMPLETED${NC}"
-echo -e "${BOLD}${BLUE}═══════════════════════════════════════════════════${NC}\n"
-
-if [ $EXIT_CODE -eq 0 ]; then
     if [ -n "$TIMESTAMP" ]; then
-        # Create final snapshot
         if create_post_snapshot "$BACKUP_DEST_PATH" "$SNAPSHOT_PATH" "data" "$TIMESTAMP"; then
-            # Show snapshot information
             echo -e "\n${YELLOW}Backup completed successfully with snapshots:${NC}"
             echo -e "${YELLOW}Pre-backup snapshot : ${SNAPSHOT_PATH}/data-pre-${TIMESTAMP}${NC}"
             echo -e "${YELLOW}Post-backup snapshot: ${SNAPSHOT_PATH}/data-post-${TIMESTAMP}${NC}"
-            echo -e "${YELLOW}Note: Use 'btrfs subvolume delete' to manage snapshots manually${NC}"
-        else
-            log_msg "WARNING" "Failed to create post-backup snapshot, but backup completed successfully"
-            echo -e "\n${YELLOW}Pre-backup snapshot is available at: ${SNAPSHOT_PATH}/data-pre-${TIMESTAMP}${NC}"
-            echo -e "${YELLOW}Note: Use 'btrfs subvolume delete' to manage snapshots manually${NC}"
         fi
     fi
-    log_msg "SUCCESS" "All backups completed successfully"
+    print_footer "BACKUP PROCESS COMPLETED"
     exit 0
 else
-    log_msg "WARNING" "Some backups failed, check logs for details"
     if [ -n "$TIMESTAMP" ]; then
         echo -e "\n${YELLOW}Backup operation had errors.${NC}"
         echo -e "${YELLOW}Pre-backup snapshot is available at: ${SNAPSHOT_PATH}/data-pre-${TIMESTAMP}${NC}"
-        echo -e "${YELLOW}Note: Use 'btrfs subvolume delete' to manage snapshots manually${NC}"
     fi
+    print_footer "BACKUP PROCESS FAILED"
     exit 1
 fi
