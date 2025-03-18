@@ -38,9 +38,9 @@ usage() {
 system_backup_function() {
     local rsync_cmd="rsync -aAXHv --info=progress2"
     [ "$delete_flag" = "true" ] && rsync_cmd+=" --delete"
-    [ -s "$exclude_file" ] && rsync_cmd+=" --exclude-from='$exclude_file'"
+    [ -s "$TEMP_EXCLUDE_FILE" ] && rsync_cmd+=" --exclude-from='$TEMP_EXCLUDE_FILE'"
     
-    eval "$rsync_cmd '$source/' '$dest_dir/'"
+    eval "$rsync_cmd '$SOURCE_DIR/' '$BACKUP_DIR/'"
     return $?
 }
 
@@ -102,9 +102,9 @@ fi
 
 # Main script execution
 if execute_backup_with_snapshots "$BACKUP_DIR" "$SNAPSHOT_DIR" system_backup_function; then
-    show_backup_results "true" "$SNAPSHOT_DIR" "system" "$TIMESTAMP"
+    show_backup_results "true" "$SNAPSHOT_DIR" "$TIMESTAMP"
     exit 0
 else
-    show_backup_results "false" "$SNAPSHOT_DIR" "system" "$TIMESTAMP"
+    show_backup_results "false" "$SNAPSHOT_DIR" "$TIMESTAMP"
     exit 1
 fi
