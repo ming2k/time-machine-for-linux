@@ -152,21 +152,11 @@ if ! confirm_execution "data backup" "n"; then
     exit 1
 fi
 
-# Create safety snapshot if path provided
-if [ -n "$SNAPSHOT_PATH" ]; then
-    log_msg "INFO" "Creating safety snapshots"
-    TIMESTAMP=$(create_safety_snapshots "$BACKUP_DEST_PATH" "$SNAPSHOT_PATH")
-    if [ $? -ne 0 ] || [ -z "$TIMESTAMP" ]; then
-        log_msg "WARNING" "Failed to create safety snapshots, proceeding without protection"
-        TIMESTAMP=""
-    fi
-fi
-
 # Perform all backups in one call
 if execute_backup_with_snapshots "$BACKUP_DEST_PATH" "$SNAPSHOT_PATH" data_backup_function; then
-    show_backup_results "true" "$SNAPSHOT_PATH" "data" "$TIMESTAMP"
+    show_backup_results "true" "$SNAPSHOT_PATH" "$TIMESTAMP"
     exit 0
 else
-    show_backup_results "false" "$SNAPSHOT_PATH" "data" "$TIMESTAMP"
+    show_backup_results "false" "$SNAPSHOT_PATH" "$TIMESTAMP"
     exit 1
 fi
