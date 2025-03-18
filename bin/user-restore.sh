@@ -12,14 +12,8 @@ SYSFILES_CONFIG="${CONFIG_DIR}/restore/system-files.conf"
 
 # Load libraries
 source "${LIB_DIR}/lib-loader.sh"
-if ! load_backup_libs "$LIB_DIR"; then
+if ! load_restore_libs "$LIB_DIR"; then
     echo "Failed to load required libraries" >&2
-    exit 1
-fi
-
-# Validate configs
-if ! validate_backup_config "$CONFIG_DIR"; then
-    log_msg "ERROR" "Invalid configuration"
     exit 1
 fi
 
@@ -33,22 +27,6 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m' # No Color
 
-# Log message with timestamp and appropriate emoji
-log_msg() {
-    local level=$1
-    local msg=$2
-    local color=$NC
-    local prefix=""
-    case $level in
-        "INFO") color=$GREEN; prefix="ℹ️ ";;
-        "WARNING") color=$YELLOW; prefix="⚠️ ";;
-        "ERROR") color=$RED; prefix="❌ ";;
-        "SUCCESS") color=$GREEN; prefix="✅ ";;
-        "STEP") color=$CYAN; prefix="🔄 ";;
-    esac
-    echo -e "${color}${prefix}[$(date '+%Y-%m-%d %H:%M:%S')] ${msg}${NC}"
-}
-
 # Check if user exists in the system
 is_valid_user() {
     local username="$1"
@@ -56,28 +34,6 @@ is_valid_user() {
         return 0
     fi
     return 1
-}
-
-# Check if backup directory contains required user data
-is_valid_backup() {
-    local backup_dir="$1"
-    local username="$2"
-    local user_home="$backup_dir/home/$username"
-    
-    if [ ! -d "$user_home" ]; then
-        log_msg "ERROR" "User home directory not found in backup: $user_home"
-        return 1
-    fi
-    
-    # Check for essential user files
-    local required_files=(".bashrc" ".profile")
-    for file in "${required_files[@]}"; do
-        if [ ! -f "$user_home/$file" ]; then
-            log_msg "WARNING" "Essential user file not found: $file"
-        fi
-    done
-    
-    return 0
 }
 
 # Generate exclude list from config file
@@ -113,7 +69,7 @@ load_system_files() {
     if [ ! -f "$system_files_config" ]; then
         log_msg "ERROR" "System files list not found: $system_files_config"
         exit 1
-    }
+    fi
     
     # Create temporary array to store system files
     declare -a SYSTEM_FILES
@@ -145,39 +101,25 @@ confirm_execution() {
     local backup_dir="$1"
     local username="$2"
     
-    echo -e "\n${BOLD}${YELLOW}═══════════════════════════════════════════════════${NC}"
-    echo -e "${BOLD}${YELLOW} USER DATA RESTORE CONFIRMATION${NC}"
-    echo -e "${BOLD}${YELLOW}═══════════════════════════════════════════════════${NC}\n"
+    print_banner "USER DATA RESTORE CONFIRMATION"
     
     echo -e "${BOLD}The following restore operation will be performed:${NC}\n"
     echo -e "${CYAN}Backup Source:${NC} ${BOLD}$backup_dir${NC}"
     echo -e "${CYAN}Target User:${NC} ${BOLD}$username${NC}"
     echo -e "${CYAN}Target Home:${NC} ${BOLD}/home/$username${NC}"
     
-    # Display excluded patterns from the temporary file
-    echo -e "\n${CYAN}Excluded Patterns:${NC}"
-    while IFS= read -r line; do
-        # Skip empty lines
-        [[ -z "$line" ]] && continue
-        # Print comments as section headers
-        if [[ "$line" =~ ^[[:space:]]*# ]]; then
-            echo -e "\n${BOLD}${line#\#}${NC}"
-        else
-            # Strip backup_dir prefix for display
-            echo -e " • ${line#$backup_dir/}"
-        fi
-    done < "$TEMP_EXCLUDE_FILE"
+    # Display excluded patterns using the new utility
+    display_rule_details "EXCLUDED PATTERNS" false "" "$TEMP_EXCLUDE_FILE" "$backup_dir"
     
-    # Display system files to be restored
-    echo -e "\n${CYAN}System Files to Restore:${NC}"
-    cat "$TEMP_SYSFILES_FILE"
+    # Display system files using the new utility
+    display_rule_details "SYSTEM FILES TO RESTORE" false "" "$TEMP_SYSFILES_FILE"
     
-    echo -e "\n${YELLOW}⚠️  Warning: This operation will overwrite existing user data.${NC}"
-    echo -e "${YELLOW}   Existing files in the target directory may be modified or deleted.${NC}\n"
+    # Display warning about data overwrite
+    display_rule_details "RESTORE WARNING" true \
+        "This operation will overwrite existing user data.\nExisting files in the target directory may be modified or deleted." \
+        ""
     
-    read -p "Do you want to proceed with the restore? (y/N) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    if ! confirm_execution "the restore operation" "n"; then
         log_msg "INFO" "Restore operation cancelled by user"
         exit 1
     fi
@@ -188,7 +130,7 @@ restore_user_data() {
     local backup_dir="$1"
     local username="$2"
     
-    log_msg "STEP" "Starting user data restore"
+    log_msg "INFO" "Starting user data restore"
     log_msg "INFO" "Source: ${BOLD}$backup_dir/home/$username${NC}"
     log_msg "INFO" "Target: ${BOLD}/home/$username${NC}"
     
@@ -214,7 +156,7 @@ restore_system_files() {
     local backup_dir="$1"
     local system_files=($2)
     
-    log_msg "STEP" "Starting system configuration restore"
+    log_msg "INFO" "Starting system configuration restore"
     
     # Create a temporary file to store rsync include patterns
     local TEMP_INCLUDE_FILE=$(mktemp)
@@ -280,12 +222,10 @@ TEMP_SYSFILES_FILE=$(mktemp)
 trap 'rm -f "$TEMP_EXCLUDE_FILE" "$TEMP_SYSFILES_FILE"' EXIT
 
 # Print header
-echo -e "\n${BOLD}${BLUE}═══════════════════════════════════════════════════${NC}"
-echo -e "${BOLD}${BLUE} USER DATA AND SYSTEM RESTORE UTILITY${NC}"
-echo -e "${BOLD}${BLUE}═══════════════════════════════════════════════════${NC}\n"
+print_banner "USER DATA AND SYSTEM RESTORE UTILITY" "$BLUE"
 
 # Validate inputs
-log_msg "STEP" "Validating inputs"
+log_msg "INFO" "Validating inputs"
 
 if [ ! -d "$BACKUP_DIR" ]; then
     log_msg "ERROR" "Backup directory does not exist: $BACKUP_DIR"
@@ -297,17 +237,19 @@ if ! is_valid_user "$USERNAME"; then
     exit 1
 fi
 
-if ! is_valid_backup "$BACKUP_DIR" "$USERNAME"; then
-    log_msg "ERROR" "Invalid backup directory structure"
+# Check if the user's home directory exists
+USER_HOME="/home/$USERNAME"
+if [ ! -d "$USER_HOME" ]; then
+    log_msg "ERROR" "User home directory does not exist: $USER_HOME"
     exit 1
 fi
 
 # Load system files list
-log_msg "STEP" "Loading system files list"
+log_msg "INFO" "Loading system files list"
 SYSTEM_FILES=$(load_system_files)
 
 # Generate exclude list
-log_msg "STEP" "Generating exclude list from configuration"
+log_msg "INFO" "Generating exclude list from configuration"
 generate_exclude_list "$BACKUP_DIR" "$USERNAME"
 
 # Ask for confirmation before proceeding
@@ -318,15 +260,11 @@ log_msg "INFO" "Starting restore process"
 # Perform restore operations
 if restore_user_data "$BACKUP_DIR" "$USERNAME"; then
     restore_system_files "$BACKUP_DIR" "$SYSTEM_FILES"
-    
-    # Print footer
-    echo -e "\n${BOLD}${BLUE}═══════════════════════════════════════════════════${NC}"
-    echo -e "${BOLD}${GREEN} RESTORE PROCESS COMPLETED${NC}"
-    echo -e "${BOLD}${BLUE}═══════════════════════════════════════════════════${NC}\n"
-    
+    print_banner "RESTORE PROCESS COMPLETED" "$GREEN"
     log_msg "SUCCESS" "Restore completed successfully"
     exit 0
 else
+    print_banner "RESTORE PROCESS FAILED" "$RED"
     log_msg "ERROR" "Restore process failed"
     exit 1
 fi

@@ -13,9 +13,6 @@ if ! load_backup_libs "$LIB_DIR"; then
     exit 1
 fi
 
-# Import colors directly to ensure they're available
-source "${LIB_DIR}/core/colors.sh"
-
 # Validate configs
 if ! validate_backup_config "$CONFIG_DIR" "data"; then
     log_msg "ERROR" "Invalid configuration"
@@ -24,154 +21,6 @@ fi
 
 # Get script directory for config path
 CONFIG_FILE="${CONFIG_DIR}/backup/data-maps.conf"
-
-# Parse and validate config file
-parse_config() {
-    if [ ! -f "$CONFIG_FILE" ]; then
-        log_msg "ERROR" "Config file not found: $CONFIG_FILE"
-        exit 1
-    fi
-    
-    # Check if config file is empty
-    if [ ! -s "$CONFIG_FILE" ]; then
-        log_msg "ERROR" "Config file is empty: $CONFIG_FILE"
-        exit 1
-    fi
-    
-    log_msg "INFO" "Using config file: $CONFIG_FILE"
-    
-    # Parse config file and validate entries
-    local line_num=0
-    local valid_entries=0
-    
-    while IFS= read -r line; do
-        ((line_num++))
-        
-        # Skip empty lines and comments
-        if [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]]; then
-            continue
-        fi
-        
-        # Split line into source and destination
-        IFS='|' read -r src_path dst_path exclude_pattern <<< "$line"
-        
-        # Trim whitespace
-        src_path=$(echo "$src_path" | xargs)
-        dst_path=$(echo "$dst_path" | xargs)
-        exclude_pattern=$(echo "$exclude_pattern" | xargs)
-        
-        # Validate source path
-        if [ -z "$src_path" ]; then
-            log_msg "WARNING" "Line $line_num: Missing source path, skipping"
-            continue
-        fi
-        
-        # Validate destination path
-        if [ -z "$dst_path" ]; then
-            log_msg "WARNING" "Line $line_num: Missing destination path, skipping"
-            continue
-        fi
-        
-        # Check if source exists
-        if ! check_directory "$src_path"; then
-            log_msg "WARNING" "Line $line_num: Invalid source directory, skipping"
-            continue
-        fi
-        
-        # Add to valid entries
-        SOURCES+=("$src_path")
-        DESTINATIONS+=("$dst_path")
-        EXCLUDES+=("$exclude_pattern")
-        ((valid_entries++))
-    done < "$CONFIG_FILE"
-    
-    if [ $valid_entries -eq 0 ]; then
-        log_msg "ERROR" "No valid entries found in config file"
-        exit 1
-    fi
-    
-    log_msg "INFO" "Found $valid_entries valid backup entries"
-}
-
-# Get backup destination with mount point
-get_backup_dest() {
-    local dst_path="$1"
-    local mount_point="$2"
-    
-    # If destination starts with / and isn't just /, it's an absolute path
-    if [[ "$dst_path" =~ ^/.+ ]]; then
-        echo "${mount_point}${dst_path}"
-    else
-        echo "${mount_point}/${dst_path}"
-    fi
-}
-
-# Create a temporary exclude file for rsync
-create_exclude_file() {
-    local exclude_pattern="$1"
-    local temp_file="$2"
-    
-    # Clear the file
-    > "$temp_file"
-    
-    # If no exclude pattern, return empty file
-    if [ -z "$exclude_pattern" ]; then
-        return 0
-    fi
-    
-    # Split patterns by comma and write to file
-    IFS=',' read -ra patterns <<< "$exclude_pattern"
-    for pattern in "${patterns[@]}"; do
-        # Trim whitespace
-        pattern=$(echo "$pattern" | xargs)
-        if [ -n "$pattern" ]; then
-            echo "$pattern" >> "$temp_file"
-        fi
-    done
-}
-
-# Display backup operation details and ask for confirmation
-confirm_execution() {
-    local backup_dest_path="$1"
-    
-    print_header "DATA BACKUP CONFIRMATION"
-    
-    echo -e "${BOLD}The following backup operations will be performed:${NC}\n"
-    
-    echo -e "${CYAN}Backup Destination Path:${NC} ${BOLD}$backup_dest_path${NC}"
-    
-    if [ -n "$SNAPSHOT_PATH" ]; then
-        echo -e "${CYAN}Safety Snapshot Base:${NC} ${BOLD}$SNAPSHOT_PATH${NC}"
-    else
-        echo -e "${CYAN}Safety Snapshot:${NC} ${BOLD}None${NC}"
-    fi
-    
-    # Display backup operations
-    echo -e "\n${CYAN}Backup Operations:${NC}"
-    for i in "${!SOURCES[@]}"; do
-        local src="${SOURCES[$i]}"
-        local dst=$(get_backup_dest "${DESTINATIONS[$i]}" "$backup_dest_path")
-        local excludes="${EXCLUDES[$i]}"
-        
-        echo -e "\n${BOLD}Backup #$((i+1)):${NC}"
-        echo -e "  ${CYAN}Source:${NC} ${BOLD}$src${NC}"
-        echo -e "  ${CYAN}Destination:${NC} ${BOLD}$dst${NC}"
-        
-        if [ -n "$excludes" ]; then
-            echo -e "  ${CYAN}Exclude Patterns:${NC} ${BOLD}$excludes${NC}"
-        fi
-    done
-    
-    echo -e "\n${YELLOW}ℹ️  Note: Files will only be added or updated.${NC}"
-    echo -e "${YELLOW}   Existing files in the destination will not be deleted.${NC}\n"
-    
-    read -p "Do you want to proceed with the backup? (y/N) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        log_msg "INFO" "Backup operation cancelled by user"
-        exit 1
-    fi
-}
 
 # Function to display script usage
 usage() {
@@ -192,43 +41,71 @@ usage() {
     exit 1
 }
 
-# Perform backup for a single source-destination pair
-perform_backup() {
-    local src="$1"
-    local dst="$2"
-    local exclude_file="$3"
-    local backup_number="$4"
-    local total_backups="$5"
+# Get backup destination with mount point
+get_backup_dest() {
+    local dst_path="$1"
+    local mount_point="$2"
     
-    log_msg "STEP" "[$backup_number/$total_backups] Backing up: $src -> $dst"
-    
-    # Create destination directory if it doesn't exist
-    mkdir -p "$dst"
-    
-    # Perform rsync backup with --update flag
-    if [ -s "$exclude_file" ]; then
-        log_msg "INFO" "Using exclude patterns from config"
-        rsync -aAXhv --update --info=progress2 --exclude-from="$exclude_file" "$src/" "$dst/"
+    # If destination starts with / and isn't just /, it's an absolute path
+    if [[ "$dst_path" =~ ^/.+ ]]; then
+        echo "${mount_point}${dst_path}"
     else
-        rsync -aAXhv --update --info=progress2 "$src/" "$dst/"
+        echo "${mount_point}/${dst_path}"
     fi
-    
-    local rsync_status=$?
-    
-    if [ $rsync_status -eq 0 ]; then
-        log_msg "SUCCESS" "Backup completed successfully: $src -> $dst"
-    else
-        log_msg "ERROR" "Failed to backup: $src -> $dst (rsync exit code: $rsync_status)"
-    fi
-    
-    return $rsync_status
 }
+
+# Function to perform data backup
+data_backup_function() {
+    for i in "${!SOURCES[@]}"; do
+        src="${SOURCES[$i]}"
+        dest_dir=$(get_backup_dest "${DESTINATIONS[$i]}" "$BACKUP_DEST_PATH")
+        excludes="${EXCLUDES[$i]}"
+        
+        convert_patterns_to_rsync_excludes "$excludes" "$TEMP_EXCLUDE_FILE"
+        
+        log_msg "INFO" "Backing up: $src -> $dest_dir"
+        
+        # Create destination directory if it doesn't exist
+        mkdir -p "$dest_dir"
+        
+        local rsync_cmd="rsync -aHv --info=progress2"
+        [ -s "$TEMP_EXCLUDE_FILE" ] && rsync_cmd+=" --exclude-from='$TEMP_EXCLUDE_FILE'"
+        
+        # Run rsync in a subshell and capture its PID
+        eval "$rsync_cmd '$src/' '$dest_dir/'" &
+        RSYNC_PID=$!
+        
+        # Wait for rsync to finish
+        wait $RSYNC_PID
+        if [ $? -ne 0 ]; then
+            log_msg "ERROR" "Backup of $src failed"
+            return 1
+        fi
+    done
+    return 0
+}
+
+# Handle Ctrl+C interruption
+handle_interrupt() {
+    echo -e "\n${YELLOW}Backup interrupted by user${NC}"
+    if [ -n "$RSYNC_PID" ]; then
+        kill -SIGINT "$RSYNC_PID" 2>/dev/null
+        wait "$RSYNC_PID" 2>/dev/null
+    fi
+    BACKUP_INTERRUPTED=true
+    echo -e "\n${YELLOW}Exiting backup process...${NC}"
+    exit 1
+}
+
+# Set up interrupt handler
+trap 'handle_interrupt' SIGINT
 
 # Main script starts here
 
 # Check if running as root
 if [ "$EUID" -ne 0 ]; then
-    log_msg "WARNING" "Not running as root, some files may not be backed up properly"
+    log_msg "ERROR" "This script must be run as root"
+    exit 1
 fi
 
 # Check arguments
@@ -239,77 +116,57 @@ fi
 BACKUP_DEST_PATH="$1"
 SNAPSHOT_PATH="$2"
 
-# Verify BTRFS requirements
-if ! is_btrfs_filesystem "$BACKUP_DEST_PATH" || ! is_btrfs_filesystem "$SNAPSHOT_PATH"; then
-    log_msg "ERROR" "Backup and snapshot paths must be on BTRFS filesystems"
+# Verify that the snapshot path is a BTRFS subvolume
+if ! is_btrfs_subvolume "$SNAPSHOT_PATH"; then
+    log_msg "ERROR" "Snapshot path '$SNAPSHOT_PATH' is not a BTRFS subvolume"
     exit 1
 fi
 
 # Print header
-print_header "DATA BACKUP UTILITY"
+print_banner "DATA BACKUP UTILITY" "$BLUE"
 
 # Initialize arrays for sources and destinations
 declare -a SOURCES=()
 declare -a DESTINATIONS=()
 declare -a EXCLUDES=()
 
+# Flag to track if backup was interrupted
+BACKUP_INTERRUPTED=false
+
 # Parse config file
-log_msg "STEP" "Parsing configuration file"
-parse_config
+log_msg "INFO" "Parsing configuration file"
+if ! parse_backup_maps "$CONFIG_FILE" SOURCES DESTINATIONS EXCLUDES true; then
+    log_msg "ERROR" "Failed to parse backup mapping configuration"
+    exit 1
+fi
 
-# Ask for confirmation before proceeding
-confirm_execution "$BACKUP_DEST_PATH"
-
-# Create temporary exclude file
+# Display backup details and ask for confirmation
 TEMP_EXCLUDE_FILE=$(mktemp)
 trap 'rm -f "$TEMP_EXCLUDE_FILE"' EXIT
+display_backup_details "data" "" "$BACKUP_DEST_PATH" "$SNAPSHOT_PATH" "$TEMP_EXCLUDE_FILE" \
+    SOURCES DESTINATIONS EXCLUDES
 
-# Perform backups
-TOTAL_BACKUPS=${#SOURCES[@]}
-SUCCESS_COUNT=0
-FAILURE_COUNT=0
+# Ask for confirmation before proceeding
+if ! confirm_execution "data backup" "n"; then
+    log_msg "INFO" "Backup operation cancelled by user"
+    exit 1
+fi
 
 # Create safety snapshot if path provided
 if [ -n "$SNAPSHOT_PATH" ]; then
-    log_msg "STEP" "Creating safety snapshots"
-    TIMESTAMP=$(date +%Y-%m-%d-%H-%M-%S)
-    if ! create_safety_snapshots "$BACKUP_DEST_PATH" "$SNAPSHOT_PATH" "data"; then
+    log_msg "INFO" "Creating safety snapshots"
+    TIMESTAMP=$(create_safety_snapshots "$BACKUP_DEST_PATH" "$SNAPSHOT_PATH")
+    if [ $? -ne 0 ] || [ -z "$TIMESTAMP" ]; then
         log_msg "WARNING" "Failed to create safety snapshots, proceeding without protection"
         TIMESTAMP=""
     fi
 fi
 
-# Process each backup operation
-for i in "${!SOURCES[@]}"; do
-    src="${SOURCES[$i]}"
-    dst=$(get_backup_dest "${DESTINATIONS[$i]}" "$BACKUP_DEST_PATH")
-    excludes="${EXCLUDES[$i]}"
-    
-    create_exclude_file "$excludes" "$TEMP_EXCLUDE_FILE"
-    
-    if perform_backup "$src" "$dst" "$TEMP_EXCLUDE_FILE" "$((i+1))" "$TOTAL_BACKUPS"; then
-        ((SUCCESS_COUNT++))
-    else
-        ((FAILURE_COUNT++))
-    fi
-done
-
-# Create final snapshot and show results
-if [ $FAILURE_COUNT -eq 0 ]; then
-    if [ -n "$TIMESTAMP" ]; then
-        if create_post_snapshot "$BACKUP_DEST_PATH" "$SNAPSHOT_PATH" "data" "$TIMESTAMP"; then
-            echo -e "\n${YELLOW}Backup completed successfully with snapshots:${NC}"
-            echo -e "${YELLOW}Pre-backup snapshot : ${SNAPSHOT_PATH}/data-pre-${TIMESTAMP}${NC}"
-            echo -e "${YELLOW}Post-backup snapshot: ${SNAPSHOT_PATH}/data-post-${TIMESTAMP}${NC}"
-        fi
-    fi
-    print_footer "BACKUP PROCESS COMPLETED"
+# Perform all backups in one call
+if execute_backup_with_snapshots "$BACKUP_DEST_PATH" "$SNAPSHOT_PATH" data_backup_function; then
+    show_backup_results "true" "$SNAPSHOT_PATH" "data" "$TIMESTAMP"
     exit 0
 else
-    if [ -n "$TIMESTAMP" ]; then
-        echo -e "\n${YELLOW}Backup operation had errors.${NC}"
-        echo -e "${YELLOW}Pre-backup snapshot is available at: ${SNAPSHOT_PATH}/data-pre-${TIMESTAMP}${NC}"
-    fi
-    print_footer "BACKUP PROCESS FAILED"
+    show_backup_results "false" "$SNAPSHOT_PATH" "data" "$TIMESTAMP"
     exit 1
 fi
