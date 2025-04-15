@@ -92,9 +92,9 @@ if confirm_execution "system backup" "n"; then
     fi
 
     # Check available disk space
-    if ! check_disk_space "$SOURCE_DIR" "$BACKUP_DIR"; then
-        exit 1
-    fi
+    # if ! check_disk_space "$SOURCE_DIR" "$BACKUP_DIR"; then
+    #     exit 1
+    # fi
 else
     log_msg "INFO" "Backup operation cancelled by user"
     exit 1
