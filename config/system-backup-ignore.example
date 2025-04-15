@@ -1,0 +1,109 @@
+# System Backup Ignore Configuration
+# This file contains gitignore-style patterns for files and directories
+# to exclude from system backups. Patterns support wildcards and negation.
+
+# Virtual filesystems and special directories
+/proc/*
+/sys/*
+/dev/*
+/run/*
+/tmp/*
+/var/tmp/*
+
+# Network filesystems and mounts
+/mnt/*
+/media/*
+/net/*
+
+# Boot and EFI partitions (usually backed up separately)
+/boot/efi/*
+
+# Swap files and hibernation
+/swapfile
+/swap.img
+/hiberfil.sys
+*.swap
+
+# System logs (often too large and regenerated)
+/var/log/*.log
+/var/log/*.gz
+/var/log/journal/*
+/var/log/audit/*
+
+# Package manager caches
+/var/cache/pacman/pkg/*
+/var/cache/apt/archives/*
+/var/cache/yum/*
+/var/cache/dnf/*
+/var/cache/zypper/*
+
+# Application caches and temporary data
+/var/cache/*
+/var/spool/*
+/var/lib/dhcp/*
+/var/lib/systemd/coredump/*
+
+# Database runtime files
+/var/lib/mysql/*.pid
+/var/lib/postgresql/*/postmaster.pid
+
+# Container runtime data
+/var/lib/docker/containers/*/
+/var/lib/containerd/io.containerd.runtime.v*/
+/var/lib/lxc/*/rootfs/
+
+# User cache and temporary directories
+/home/*/.cache/*
+/home/*/.local/share/Trash/*
+/home/*/tmp/*
+/home/*/.thumbnails/*
+/home/*/.gvfs/*
+
+# Browser caches and temporary files
+/home/*/.mozilla/firefox/*/Cache/*
+/home/*/.cache/chromium/*
+/home/*/.cache/google-chrome/*
+/home/*/.cache/mozilla/*
+
+# Development temporary files
+/home/*/.npm/_cacache/*
+/home/*/node_modules/*/
+/home/*/.cargo/registry/*
+/home/*/.gradle/caches/*
+/home/*/.m2/repository/*
+
+# IDE and editor temporary files
+/home/*/.vscode/extensions/*/
+/home/*/.local/share/JetBrains/*/
+*.tmp
+*.temp
+*~
+.#*
+\#*\#
+
+# Lost+found directories
+lost+found/
+
+# Large media files that may be duplicates
+/home/*/Downloads/*.iso
+/home/*/Downloads/*.img
+/home/*/Downloads/*.dmg
+
+# Virtual machine disk images (usually too large)
+*.vmdk
+*.vdi
+*.qcow2
+*.img
+
+# Steam and game data (often re-downloadable)
+/home/*/.local/share/Steam/steamapps/common/*
+/home/*/.steam/steam/steamapps/common/*
+
+# Flatpak and Snap runtime data
+/var/lib/flatpak/runtime/*
+/var/lib/snapd/snaps/*
+/snap/*/
+
+# Negation examples (uncomment to include specific items)
+# !/var/log/important.log
+# !/home/*/important-cache/

@@ -1,15 +1,17 @@
 #!/bin/bash
 
 source "${LIB_DIR}/core/logging.sh"
-source "${LIB_DIR}/fs/fs-utils.sh"
+source "${LIB_DIR}/fs/utils.sh"
 
-# Parse backup mapping configuration file (source|destination|excludes)
+# Parse backup mapping configuration file (source|destination|excludes|keep_list|backup_mode)
 parse_backup_maps() {
     local config_file="$1"
     local -n sources_ref="$2"
     local -n destinations_ref="$3"
     local -n excludes_ref="$4"
     local validate_paths="${5:-true}"  # Optional: validate source paths
+    local -n keep_lists_ref="${6:-}"   # Optional: keep list files array
+    local -n backup_modes_ref="${7:-}" # Optional: backup modes array
     
     if [ ! -f "$config_file" ]; then
         log_msg "ERROR" "Config file not found: $config_file"
@@ -36,13 +38,18 @@ parse_backup_maps() {
             continue
         fi
         
-        # Split line into source and destination
-        IFS='|' read -r src_path dst_path exclude_pattern <<< "$line"
+        # Split line into components (source|destination|excludes|keep_list|backup_mode)
+        IFS='|' read -r src_path dst_path exclude_pattern keep_list_file backup_mode <<< "$line"
         
         # Trim whitespace
         src_path=$(echo "$src_path" | xargs)
         dst_path=$(echo "$dst_path" | xargs)
         exclude_pattern=$(echo "$exclude_pattern" | xargs)
+        keep_list_file=$(echo "$keep_list_file" | xargs)
+        backup_mode=$(echo "$backup_mode" | xargs)
+        
+        # Set defaults
+        [[ -z "$backup_mode" ]] && backup_mode="full"
         
         # Validate source path
         if [ -z "$src_path" ]; then
@@ -62,10 +69,25 @@ parse_backup_maps() {
             continue
         fi
         
+        # Validate backup mode
+        if [[ "$backup_mode" != "full" && "$backup_mode" != "incremental" ]]; then
+            log_msg "WARNING" "Line $line_num: Invalid backup mode '$backup_mode', using 'full'"
+            backup_mode="full"
+        fi
+        
         # Add to valid entries
         sources_ref+=("$src_path")
         destinations_ref+=("$dst_path")
         excludes_ref+=("$exclude_pattern")
+        
+        # Add keep list and backup mode if arrays were provided
+        if [[ -n "${!keep_lists_ref}" ]]; then
+            keep_lists_ref+=("$keep_list_file")
+        fi
+        if [[ -n "${!backup_modes_ref}" ]]; then
+            backup_modes_ref+=("$backup_mode")
+        fi
+        
         ((valid_entries++))
     done < "$config_file"
     

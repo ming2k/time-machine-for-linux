@@ -1,211 +1,146 @@
-# Linux Time Machine
+# Time Machine for Linux
 
-A comprehensive backup solution for Linux systems, providing functionality similar to Apple's Time Machine. This project includes utilities for system backup, data backup, and user data restoration.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Shell](https://img.shields.io/badge/Shell-Bash-green.svg)](https://www.gnu.org/software/bash/)
+[![BTRFS](https://img.shields.io/badge/Filesystem-BTRFS-blue.svg)](https://btrfs.wiki.kernel.org/)
 
-## Features
+[English](README.md) | [中文](README.zh.md)
 
-- **System Backup**: Full system backup with BTRFS snapshots support
-- **Data Backup**: Configurable data backup with exclude patterns
-- **User Restore**: Selective restoration of user data and system configurations
-- **BTRFS Support**: Efficient snapshot management using BTRFS
-- **Flexible Configuration**: Easily customizable backup paths and exclusion patterns
+A simple backup solution for Linux systems providing Apple Time Machine-like functionality. Separates system backup (slim & complete) from data backup (comprehensive & selective).
 
-## Prerequisites
+## How to Use
 
-- Linux system with `rsync` installed
-- BTRFS filesystem for backup destination (required)
-- Root privileges for system operations
-
-### Recommended BTRFS Structure
-
+### System Backup
+```bash
+# Backup your complete system (excluding media files)
+sudo ./bin/system-backup.sh / /mnt/@root /mnt/@snapshots
 ```
-/mnt/
-├── @root      # System root backup
-├── @data      # General data backup
-└── @snapshots # Backup snapshots
+### Data Backup - Keep Your Media & Files
+```bash
+# Backup your important data and media files
+sudo ./bin/data-backup.sh /home/user /mnt/@data /mnt/@snapshots
+```
+## Backup Principles
+
+### System Backup (Blacklist - Exclude What You Don't Need)
+- **Goal**: Complete system preservation for full recovery
+- **Method**: Backup everything EXCEPT excluded items
+- **Strategy**: Keep it slim by excluding:
+  - Large Data files (AI Models, Music, Videos and so on)
+  - Temporary files and caches
+  - Virtual filesystems (/proc, /sys, /dev)
+  - Files that cause redundant (/home/*/{Downloads,downloads}, /mnt, /snapshots if it exists )
+
+### Data Backup (Whitelist - Include What You Want)
+- **Goal**: Comprehensive data preservation with incremental support
+- **Method**: Only backup explicitly included patterns
+- **Strategy**: Selective backup of:
+  - Documents and personal files
+  - Media collections
+  - Project files
+  - Configuration backups
+
+## Configuration
+
+### System Backup Config - `config/system-backup-ignore`
+```bash
+# Exclude media files (put them in data backup instead)
+/home/*/Music/
+/home/*/Videos/
+/home/*/Downloads/
+
+# Exclude virtual filesystems
+/proc/*
+/sys/*
+/dev/*
+
+# Exclude temporary files
+*.tmp
+*.cache
+```
+
+### Data Backup Config - `config/data-backup-keep`
+```bash
+# Include documents
+*.pdf
+*.doc
+*.txt
+
+# Include media (excluded from system backup)
+/home/*/Music/
+/home/*/Videos/
+/home/*/Pictures/
+
+# Include projects
+Projects/
+Documents/
 ```
 
 ## Installation
 
-1. Clone the repository:
+### Quick Start
 ```bash
 git clone https://github.com/ming2k/time-machine-for-linux.git
 cd time-machine-for-linux
-```
 
-2. Make scripts executable:
-```bash
-chmod +x bin/*.sh
-```
-
-## Usage
-
-### System Backup
-
-Backup the entire system with snapshots:
-
-```bash
-# Full system backup
+# Run system backup
 sudo ./bin/system-backup.sh / /mnt/@root /mnt/@snapshots
 
-# Validate snapshot functionality without performing backup
-sudo ./bin/system-backup.sh --validate-snapshots / /mnt/@root /mnt/@snapshots
+# Run data backup
+sudo ./bin/data-backup.sh /home/user /mnt/@data /mnt/@snapshots
 ```
 
-Requirements:
-- `source_path`: Root filesystem to backup (usually /)
-- `backup_path`: Destination path on BTRFS filesystem (e.g., /mnt/@root)
-- `snapshot_path`: Path for storing snapshots (e.g., /mnt/@snapshots)
+### Prerequisites
+- Linux with `rsync` and `btrfs` commands
+- BTRFS filesystem for backup destination
+- Root privileges for system operations
 
-### Data Backup
+### BTRFS Setup
 
-Backup specified data directories according to configuration:
-
+#### Option 1: Simple BTRFS Setup
 ```bash
-sudo ./bin/data-backup.sh /mnt/@data /mnt/@snapshots
-```
-
-Requirements:
-- `backup_path`: Destination path for data backups (e.g., /mnt/@data)
-- `snapshot_path`: Path for storing snapshots (e.g., /mnt/@snapshots)
-
-The script will:
-1. Create a safety snapshot before backup
-2. Perform configured backup operations
-3. Create a final snapshot if backup succeeds
-4. Keep snapshots for recovery if needed
-
-### User Data Restore
-
-Restore user data and system configurations:
-
-```bash
-sudo ./bin/user-restore.sh /mnt/@root username
-```
-
-## Configuration
-
-### Data Backup Maps
-
-Edit `config/backup/data-maps.conf` to configure source and destination paths:
-
-```
-# Format: source_path|destination_path|exclude_patterns
-/home/user/Documents|/documents|*.tmp,*.cache
-/var/www/html|/websites|.git,node_modules
-```
-
-### System Backup Exclusions
-
-Edit `config/backup/system-exclude.conf` to specify paths to exclude from system backup:
-
-```
-# System paths and mount points
-/proc/*
-/sys/*
-/tmp/*
-/run/*
-/mnt/*
-/media/*
-...
-```
-
-### User Restore Configuration
-
-- `config/restore/exclude.conf`: Patterns to exclude during user data restoration
-- `config/restore/system-files.conf`: System configuration files to restore
-
-## BTRFS Setup
-
-### Create BTRFS Filesystem
-
-```bash
-sudo mkfs.btrfs /dev/sdX
-```
-
-### Create Subvolumes
-
-```bash
-sudo mount /dev/sdX /mnt
+# Create subvolumes
 sudo btrfs subvolume create /mnt/@root
 sudo btrfs subvolume create /mnt/@data
 sudo btrfs subvolume create /mnt/@snapshots
 ```
 
-### Mount Subvolumes
+#### Option 2: Encrypted BTRFS+LUKS Setup
+Use the provided tool for secure encrypted backup storage:
 
-Add to /etc/fstab:
-```
-UUID=<device-uuid>  /mnt/@root      btrfs  subvol=@root,compress=zstd:1     0 0
-UUID=<device-uuid>  /mnt/@data      btrfs  subvol=@data,compress=zstd:1     0 0
-UUID=<device-uuid>  /mnt/@snapshots btrfs  subvol=@snapshots,compress=zstd:1 0 0
-```
-
-### Manage Snapshots
-
-List snapshots:
 ```bash
-sudo btrfs subvolume list /mnt
+# Format device with LUKS encryption + BTRFS with subvolumes
+sudo ./tools/format-btrfs-luks.sh -d /dev/sdX
+
+# After setup, mount the encrypted filesystem:
+sudo cryptsetup open /dev/sdX encrypted_root
+sudo mount /dev/mapper/encrypted_root /mnt
+
+# Create additional subvolumes for backups:
+sudo btrfs subvolume create /mnt/@root     # System backups
+sudo btrfs subvolume create /mnt/@data     # Data backups
+sudo btrfs subvolume create /mnt/@snapshots # Backup snapshots
 ```
 
-Delete snapshot:
-```bash
-sudo btrfs subvolume delete /mnt/@snapshots/snapshot-name
-```
+**⚠️ Warning**: The format tool will **DESTROY ALL DATA** on the specified device!
 
-## Project Structure
+## Why This Approach?
 
-```
-linux-time-machine/
-├── bin/                    # Executable scripts
-├── lib/                    # Library modules
-│   ├── core/              # Core functionality
-│   ├── fs/                # Filesystem operations
-│   ├── config/            # Configuration handling
-│   ├── backup/            # Backup operations
-│   └── ui/                # User interface components
-├── config/                # Configuration files
-│   ├── backup/           # Backup configurations
-│   └── restore/          # Restore configurations
-├── tests/                 # Test suite
-└── docs/                 # Documentation
-```
+**System Backup (Blacklist)**:
+- Ensures complete system recovery capability
+- Excludes media to keep backup size manageable
+- Preserves all applications and system state
+- Quick system restoration when needed
 
-## Module Organization
+**Data Backup (Whitelist)**:
+- Handles large media files separately
+- Supports incremental backups efficiently
+- Flexible selection of what to preserve
+- Optimized for large storage scenarios
 
-### Core Module
-- Basic utilities and shared functionality
-- Logging, colors, library loading
-
-### Filesystem Module
-- Filesystem operations and utilities
-- BTRFS-specific operations
-
-### Config Module
-- Configuration parsing and validation
-- Config file management
-
-### Backup Module
-- Backup operations and protection
-- Snapshot management
-
-### UI Module
-- User interface components
-- Progress display and user interaction
-
-## Contributing
-
-1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a new Pull Request
+**Result**: You get a complete system that can be fully restored (without media clutter) + comprehensive data backup with all your files and media.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Safety Note
-
-Always verify your backups and test the restoration process in a safe environment before relying on them for critical data.
+MIT License - see [LICENSE](LICENSE) file for details.
 

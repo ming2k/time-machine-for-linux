@@ -1,17 +1,58 @@
+# Senstive Info
+data-backup-keep
+system-backup-ignore
+
+# Logs
+var/log/*.log
+var/log/*.log.*
+logs/
+*.log
+*.log.*
+
+.editorconfig
+
+# Claude
+.claude/
+CLAUDE.md
+
+
+# Runtime files
+var/run/*.pid
+var/lib/*
+
 # Temporary files
 *.tmp
+*.temp
 *~
 *.swp
 *.swo
+
+# Build artifacts
+*.o
+*.so
+*.a
+.build/
+dist/
+
+# Test artifacts
+tests/fixtures/generated/
+tests/.coverage
+*.test
+
+# Editor files
+.vscode/
+.idea/
+*.sublime-*
+.DS_Store
+Thumbs.db
 
 # Backup files
 *.bak
 *.backup
 
-# Test files
-tests/fixtures/*
-!tests/fixtures/.gitkeep
+# Configuration overrides
+config/local/
+*.local.conf
 
-# System files
-.DS_Store
-Thumbs.db 
+# Personal scripts
+scripts/personal/

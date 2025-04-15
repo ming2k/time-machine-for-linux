@@ -2,7 +2,7 @@
 
 source "${LIB_DIR}/core/logging.sh"
 source "${LIB_DIR}/backup/backup-protection.sh"
-source "${LIB_DIR}/fs/btrfs-utils.sh"  # Added for BTRFS validation
+source "${LIB_DIR}/fs/btrfs.sh"  # Added for BTRFS validation
 
 
 # Execute backup with snapshot protection
@@ -39,6 +39,37 @@ execute_backup_with_snapshots() {
     fi
     
     log_msg "SUCCESS" "Backup completed successfully"
+    return 0
+}
+
+# Execute system backup with single snapshot (post-backup only)
+execute_system_backup_with_snapshot() {
+    local backup_dest_dir="$1"
+    local backup_snapshot_dir="$2"
+    local backup_function="$3"  # Function to perform the actual backup
+
+    # Execute the system backup function first
+    if ! $backup_function; then
+        log_msg "ERROR" "System backup function failed"
+        return 1
+    fi
+    
+    # Create single snapshot after successful backup
+    local backup_timestamp=""
+    if [ -n "$backup_snapshot_dir" ]; then
+        log_msg "INFO" "Creating system backup snapshot"
+        backup_timestamp=$(create_safety_snapshots "$backup_dest_dir" "$backup_snapshot_dir")
+        if [ $? -ne 0 ] || [ -z "$backup_timestamp" ]; then
+            log_msg "WARNING" "Failed to create system backup snapshot"
+        else
+            log_msg "SUCCESS" "System backup snapshot created: $backup_timestamp"
+        fi
+    fi
+    
+    # Export timestamp for use in results
+    TIMESTAMP="$backup_timestamp"
+    
+    log_msg "SUCCESS" "System backup completed successfully"
     return 0
 }
 
@@ -86,11 +117,24 @@ create_safety_snapshots() {
         fi
     fi
 
-    local snapshot_timestamp=$(date +%Y-%m-%d-%H-%M-%S)
+    local snapshot_timestamp=$(date +%Y%m%d%H%M%S)
     
-    # Extract the base name of the destination directory
-    local snapshot_dest_name=$(basename "$snapshot_dest_dir")
-    local snapshot_path="${snapshot_snapshot_dir}/${snapshot_dest_name}-${snapshot_timestamp}"
+    # Extract and clean the base name of the destination directory
+    local snapshot_dest_name=$(basename "${snapshot_dest_dir%/}")
+    
+    # Remove leading slash and trailing slashes from snapshot directory
+    local clean_snapshot_dir="${snapshot_snapshot_dir%/}"
+    
+    # Create a more descriptive snapshot name for system backups
+    if [[ "$snapshot_dest_name" == "@" ]]; then
+        local snapshot_name="system-backup-${snapshot_timestamp}"
+    elif [[ "$snapshot_dest_name" == "@data" ]]; then
+        local snapshot_name="data-backup-${snapshot_timestamp}"
+    else
+        local snapshot_name="${snapshot_dest_name}-backup-${snapshot_timestamp}"
+    fi
+    
+    local snapshot_path="${clean_snapshot_dir}/${snapshot_name}"
 
     log_msg "INFO" "Creating backup snapshot at: $snapshot_path"
 
