@@ -86,7 +86,7 @@ create_safety_snapshots() {
         fi
     fi
 
-    local snapshot_timestamp=$(date +%Y-%m-%d-%H-%M-%S)
+    local snapshot_timestamp=$(date +%Y%m%d%H%M%S)
     
     # Extract the base name of the destination directory
     local snapshot_dest_name=$(basename "$snapshot_dest_dir")

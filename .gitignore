@@ -8,6 +8,12 @@
 *.bak
 *.backup
 
+# Log files
+logs/*
+!logs/.gitkeep
+*.log
+*.log.*
+
 # Test files
 tests/fixtures/*
 !tests/fixtures/.gitkeep

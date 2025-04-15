@@ -9,12 +9,17 @@ A comprehensive backup solution for Linux systems, providing functionality simil
 - **User Restore**: Selective restoration of user data and system configurations
 - **BTRFS Support**: Efficient snapshot management using BTRFS
 - **Flexible Configuration**: Easily customizable backup paths and exclusion patterns
+- **Robust Logging**: Comprehensive logging system with rotation support
+- **Configuration Validation**: Automatic validation of backup configurations
+- **Test Suite**: Comprehensive test coverage for core functionality
+- **Error Handling**: Detailed error reporting and recovery options
 
 ## Prerequisites
 
 - Linux system with `rsync` installed
 - BTRFS filesystem for backup destination (required)
 - Root privileges for system operations
+- Bash 4.0 or later
 
 ### Recommended BTRFS Structure
 
@@ -36,6 +41,11 @@ cd time-machine-for-linux
 2. Make scripts executable:
 ```bash
 chmod +x bin/*.sh
+```
+
+3. Validate your configuration:
+```bash
+sudo ./bin/validate-config.sh all
 ```
 
 ## Usage
@@ -115,6 +125,28 @@ Edit `config/backup/system-exclude.conf` to specify paths to exclude from system
 - `config/restore/exclude.conf`: Patterns to exclude during user data restoration
 - `config/restore/system-files.conf`: System configuration files to restore
 
+## Logging
+
+The backup system maintains detailed logs in the `logs` directory:
+
+- `backup.log`: Current log file
+- `backup.log.1`, `backup.log.2`, etc.: Rotated log files
+- Log rotation: 10MB size limit, keeps 5 rotated files
+
+## Testing
+
+Run the test suite to verify functionality:
+
+```bash
+./tests/test_runner.sh
+```
+
+Test categories:
+- Unit tests for core functionality
+- Integration tests for backup operations
+- Configuration validation tests
+- Error handling tests
+
 ## BTRFS Setup
 
 ### Create BTRFS Filesystem
@@ -158,6 +190,10 @@ sudo btrfs subvolume delete /mnt/@snapshots/snapshot-name
 ```
 linux-time-machine/
 ├── bin/                    # Executable scripts
+│   ├── system-backup.sh   # System backup utility
+│   ├── data-backup.sh     # Data backup utility
+│   ├── user-restore.sh    # User data restore utility
+│   └── validate-config.sh # Configuration validator
 ├── lib/                    # Library modules
 │   ├── core/              # Core functionality
 │   ├── fs/                # Filesystem operations
@@ -168,6 +204,10 @@ linux-time-machine/
 │   ├── backup/           # Backup configurations
 │   └── restore/          # Restore configurations
 ├── tests/                 # Test suite
+│   ├── unit/             # Unit tests
+│   ├── integration/      # Integration tests
+│   └── test_utils.sh     # Test utilities
+├── logs/                  # Log files
 └── docs/                 # Documentation
 ```
 
@@ -176,30 +216,36 @@ linux-time-machine/
 ### Core Module
 - Basic utilities and shared functionality
 - Logging, colors, library loading
+- Error handling and reporting
 
 ### Filesystem Module
 - Filesystem operations and utilities
 - BTRFS-specific operations
+- Path validation and management
 
 ### Config Module
 - Configuration parsing and validation
 - Config file management
+- Environment variable support
 
 ### Backup Module
 - Backup operations and protection
 - Snapshot management
+- Progress tracking and reporting
 
 ### UI Module
 - User interface components
 - Progress display and user interaction
+- Error message formatting
 
 ## Contributing
 
 1. Fork the repository
 2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a new Pull Request
+3. Run tests: `./tests/test_runner.sh`
+4. Commit your changes
+5. Push to the branch
+6. Create a new Pull Request
 
 ## License
 
