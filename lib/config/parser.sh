@@ -172,4 +172,108 @@ parse_backup_mapping() {
     
     log_msg "INFO" "Found $valid_entries valid backup entries"
     return 0
+}
+
+# Parse shell-style data backup map configuration
+parse_data_backup_map() {
+    local config_file="$1"
+    local -n sources_ref="$2"
+    local -n destinations_ref="$3"
+    local -n excludes_ref="$4"
+    local -n backup_modes_ref="$5"
+    local validate_paths="${6:-true}"
+    
+    if [ ! -f "$config_file" ]; then
+        log_msg "ERROR" "Config file not found: $config_file"
+        return 1
+    fi
+    
+    if [ ! -s "$config_file" ]; then
+        log_msg "ERROR" "Config file is empty: $config_file"
+        return 1
+    fi
+    
+    log_msg "INFO" "Parsing data backup map: $config_file"
+    
+    # Source the configuration file in a subshell to extract variables
+    local temp_env=$(mktemp)
+    trap 'rm -f "$temp_env"' RETURN
+    
+    # Extract all BACKUP_ENTRY variables
+    grep '^BACKUP_ENTRY_[0-9]\+_' "$config_file" > "$temp_env" 2>/dev/null || {
+        log_msg "ERROR" "No backup entries found in config file"
+        return 1
+    }
+    
+    # Source the variables
+    source "$temp_env" 2>/dev/null || {
+        log_msg "ERROR" "Failed to parse config file syntax"
+        return 1
+    }
+    
+    # Find all entry numbers
+    local entry_numbers=($(grep '^BACKUP_ENTRY_[0-9]\+_' "$config_file" | \
+                          sed 's/BACKUP_ENTRY_\([0-9]\+\)_.*/\1/' | \
+                          sort -n | uniq))
+    
+    if [ ${#entry_numbers[@]} -eq 0 ]; then
+        log_msg "ERROR" "No valid backup entries found"
+        return 1
+    fi
+    
+    local valid_entries=0
+    
+    # Process each entry
+    for entry_num in "${entry_numbers[@]}"; do
+        local source_var="BACKUP_ENTRY_${entry_num}_SOURCE"
+        local dest_var="BACKUP_ENTRY_${entry_num}_DEST"
+        local ignore_var="BACKUP_ENTRY_${entry_num}_IGNORE"
+        local mode_var="BACKUP_ENTRY_${entry_num}_MODE"
+        
+        # Get values (use indirect variable expansion)
+        local source_path="${!source_var:-}"
+        local dest_path="${!dest_var:-}"
+        local ignore_pattern="${!ignore_var:-}"
+        local backup_mode="${!mode_var:-full}"
+        
+        # Validate required fields
+        if [ -z "$source_path" ]; then
+            log_msg "WARNING" "Entry $entry_num: Missing source path, skipping"
+            continue
+        fi
+        
+        if [ -z "$dest_path" ]; then
+            log_msg "WARNING" "Entry $entry_num: Missing destination path, skipping" 
+            continue
+        fi
+        
+        # Validate source path exists (if requested)
+        if [ "$validate_paths" = "true" ] && [ ! -d "$source_path" ]; then
+            log_msg "WARNING" "Entry $entry_num: Source directory does not exist: $source_path"
+            continue
+        fi
+        
+        # Validate backup mode
+        if [[ "$backup_mode" != "full" && "$backup_mode" != "incremental" && "$backup_mode" != "mirror" ]]; then
+            log_msg "WARNING" "Entry $entry_num: Invalid backup mode '$backup_mode', using 'full'"
+            backup_mode="full"
+        fi
+        
+        # Add to arrays
+        sources_ref+=("$source_path")
+        destinations_ref+=("$dest_path")
+        excludes_ref+=("$ignore_pattern")
+        backup_modes_ref+=("$backup_mode")
+        
+        ((valid_entries++))
+        log_msg "INFO" "Entry $entry_num: $source_path -> $dest_path (mode: $backup_mode)"
+    done
+    
+    if [ $valid_entries -eq 0 ]; then
+        log_msg "ERROR" "No valid backup entries processed"
+        return 1
+    fi
+    
+    log_msg "INFO" "Successfully parsed $valid_entries backup entries"
+    return 0
 } 

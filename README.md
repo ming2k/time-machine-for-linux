@@ -15,10 +15,13 @@ A simple backup solution for Linux systems providing Apple Time Machine-like fun
 # Backup your complete system (excluding media files)
 sudo ./bin/system-backup.sh / /mnt/@root /mnt/@snapshots
 ```
-### Data Backup - Keep Your Media & Files
+### Data Backup - Multiple Sources & Destinations
 ```bash
-# Backup your important data and media files
-sudo ./bin/data-backup.sh /home/user /mnt/@data /mnt/@snapshots
+# Backup multiple sources with individual configurations
+sudo ./bin/data-backup.sh --dest /mnt/@data --snapshots /mnt/@snapshots
+
+# Using custom configuration file
+sudo ./bin/data-backup.sh --dest /mnt/@data --snapshots /mnt/@snapshots --config custom-map.conf
 ```
 ## Backup Principles
 
@@ -31,14 +34,14 @@ sudo ./bin/data-backup.sh /home/user /mnt/@data /mnt/@snapshots
   - Virtual filesystems (/proc, /sys, /dev)
   - Files that cause redundant (/home/*/{Downloads,downloads}, /mnt, /snapshots if it exists )
 
-### Data Backup (Whitelist - Include What You Want)
-- **Goal**: Comprehensive data preservation with incremental support
-- **Method**: Only backup explicitly included patterns
-- **Strategy**: Selective backup of:
-  - Documents and personal files
-  - Media collections
-  - Project files
-  - Configuration backups
+### Data Backup (Map-Based - Multiple Sources with Custom Rules)
+- **Goal**: Flexible backup of multiple directories with individual control
+- **Method**: Source-destination mapping with per-source ignore patterns and backup modes
+- **Strategy**: Organized backup with:
+  - Multiple source directories mapped to subdirectories
+  - Individual ignore patterns per source (gitignore syntax)
+  - Choice of backup modes: full, incremental, or mirror
+  - Centralized configuration in `config/data-backup-map.conf`
 
 ## Configuration
 
@@ -59,22 +62,37 @@ sudo ./bin/data-backup.sh /home/user /mnt/@data /mnt/@snapshots
 *.cache
 ```
 
-### Data Backup Config - `config/data-backup-keep`
+### Data Backup Config - `config/data-backup-map.conf`
 ```bash
-# Include documents
-*.pdf
-*.doc
-*.txt
+# Map-based configuration with shell variables
 
-# Include media (excluded from system backup)
-/home/*/Music/
-/home/*/Videos/
-/home/*/Pictures/
+# User home directory (excluding downloads and caches)
+BACKUP_ENTRY_1_SOURCE="/home/user"
+BACKUP_ENTRY_1_DEST="home_user"
+BACKUP_ENTRY_1_IGNORE="Downloads/,downloads/,.cache/,*.tmp,*.log"
+BACKUP_ENTRY_1_MODE="incremental"
 
-# Include projects
-Projects/
-Documents/
+# Important documents folder
+BACKUP_ENTRY_2_SOURCE="/home/user/Documents"
+BACKUP_ENTRY_2_DEST="documents"
+BACKUP_ENTRY_2_MODE="full"
+
+# Media collection
+BACKUP_ENTRY_3_SOURCE="/home/user/Media"
+BACKUP_ENTRY_3_DEST="media" 
+BACKUP_ENTRY_3_IGNORE="*.tmp,*.partial"
+BACKUP_ENTRY_3_MODE="incremental"
+
+# Website directory (exact mirror)
+BACKUP_ENTRY_4_SOURCE="/var/www"
+BACKUP_ENTRY_4_DEST="website"
+BACKUP_ENTRY_4_MODE="mirror"  # Will delete files not in source
 ```
+
+**Backup Modes:**
+- **full**: Copy all files, keep existing files in destination
+- **incremental**: Only copy changed files (uses rsync's change detection)
+- **mirror**: Create exact mirror, removes files not present in source
 
 ## Installation
 
@@ -83,11 +101,14 @@ Documents/
 git clone https://github.com/ming2k/time-machine-for-linux.git
 cd time-machine-for-linux
 
-# Run system backup
-sudo ./bin/system-backup.sh / /mnt/@root /mnt/@snapshots
+# Configure data backup sources (edit config/data-backup-map.conf)
+# See examples in config/data-backup-map.conf.example
 
-# Run data backup
-sudo ./bin/data-backup.sh /home/user /mnt/@data /mnt/@snapshots
+# Run system backup
+sudo ./bin/system-backup.sh --source / --dest /mnt/@root --snapshots /mnt/@snapshots
+
+# Run data backup (multiple sources)
+sudo ./bin/data-backup.sh --dest /mnt/@data --snapshots /mnt/@snapshots
 ```
 
 ### Prerequisites
@@ -132,13 +153,14 @@ sudo btrfs subvolume create /mnt/@snapshots # Backup snapshots
 - Preserves all applications and system state
 - Quick system restoration when needed
 
-**Data Backup (Whitelist)**:
-- Handles large media files separately
-- Supports incremental backups efficiently
-- Flexible selection of what to preserve
-- Optimized for large storage scenarios
+**Data Backup (Map-Based)**:
+- Handles multiple sources with individual control
+- Each source can have different ignore patterns and backup modes
+- Organized into subdirectories for easy management
+- Supports full, incremental, and mirror backup modes
+- Flexible configuration for various backup scenarios
 
-**Result**: You get a complete system that can be fully restored (without media clutter) + comprehensive data backup with all your files and media.
+**Result**: You get a complete system that can be fully restored (without media clutter) + flexible data backup with multiple sources, each configured according to your specific needs.
 
 ## License
 

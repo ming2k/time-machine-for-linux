@@ -25,7 +25,7 @@ if [ -f "$CONFIG_FILE" ]; then
     fi
     
     # Check file size
-    local config_size=$(stat -f%z "$CONFIG_FILE" 2>/dev/null || stat -c%s "$CONFIG_FILE" 2>/dev/null || echo 0)
+    config_size=$(stat -f%z "$CONFIG_FILE" 2>/dev/null || stat -c%s "$CONFIG_FILE" 2>/dev/null || echo 0)
     if [ "$config_size" -eq 0 ]; then
         log_msg "WARNING" "Config file is empty: $CONFIG_FILE"
     else
@@ -81,13 +81,22 @@ check_disk_space() {
 
 # Display usage information
 usage() {
-    echo -e "${BOLD}Usage:${NC} $0 [--validate-snapshots] <source_dir> <backup_dir> <snapshot_dir>"
-    echo -e "${BOLD}Example:${NC} $0 /mnt /mnt/@backup /mnt/@backup_snapshots"
+    echo -e "${BOLD}Usage:${NC} $0 --dest <backup_dir> --snapshots <snapshot_dir> [--source <source_dir>] [OPTIONS]"
     echo
-    echo -e "${BOLD}Arguments:${NC}"
-    echo " source_dir   : Source directory to backup (root filesystem)"
-    echo " backup_dir   : Destination directory for backup (must be on BTRFS)"
-    echo " snapshot_dir : Directory for storing snapshots (must be on BTRFS)"
+    echo -e "${BOLD}Required Parameters:${NC}"
+    echo " --dest <path>       : Destination directory for backup (must be on BTRFS)"
+    echo " --snapshots <path>  : Directory for storing snapshots (must be on BTRFS)"
+    echo
+    echo -e "${BOLD}Optional Parameters:${NC}"
+    echo " --source <path>     : Source directory to backup (default: /)"
+    echo
+    echo -e "${BOLD}Options:${NC}"
+    echo " --help, -h          : Show this help message"
+    echo
+    echo -e "${BOLD}Examples:${NC}"
+    echo " $0 --dest /mnt/@backup --snapshots /mnt/@backup_snapshots"
+    echo " $0 --dest /mnt/@backup --snapshots /mnt/@backup_snapshots --source /mnt"
+    echo " $0 --snapshots /mnt/@backup_snapshots --dest /mnt/@backup --source /"
     echo
     echo -e "${BOLD}Note:${NC} The source directory must be a valid system root containing"
     echo "      essential system directories and files (etc, usr, bin, etc.)"
@@ -210,16 +219,69 @@ verify_backup_integrity() {
     return 0
 }
 
+# Parse command line arguments
+parse_arguments() {
+    BACKUP_DIR=""
+    SNAPSHOT_DIR=""
+    SOURCE_DIR="/"  # Default to root filesystem
+    
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --dest)
+                if [ -z "$2" ]; then
+                    log_msg "ERROR" "--dest requires a path argument"
+                    usage
+                fi
+                BACKUP_DIR="$2"
+                shift 2
+                ;;
+            --snapshots)
+                if [ -z "$2" ]; then
+                    log_msg "ERROR" "--snapshots requires a path argument"
+                    usage
+                fi
+                SNAPSHOT_DIR="$2"
+                shift 2
+                ;;
+            --source)
+                if [ -z "$2" ]; then
+                    log_msg "ERROR" "--source requires a path argument"
+                    usage
+                fi
+                SOURCE_DIR="$2"
+                shift 2
+                ;;
+            --help|-h)
+                usage
+                ;;
+            -*)
+                log_msg "ERROR" "Unknown option: $1"
+                usage
+                ;;
+            *)
+                log_msg "ERROR" "Unexpected argument: $1"
+                usage
+                ;;
+        esac
+    done
+
+    # Validate required parameters
+    if [ -z "$BACKUP_DIR" ]; then
+        log_msg "ERROR" "Missing required parameter: --dest"
+        usage
+    fi
+    
+    if [ -z "$SNAPSHOT_DIR" ]; then
+        log_msg "ERROR" "Missing required parameter: --snapshots"
+        usage
+    fi
+}
+
 # Main script starts here
 # ---------------------------
 
-if [ $# -ne 3 ]; then
-    usage
-fi
-
-SOURCE_DIR="$1"
-BACKUP_DIR="$2"
-SNAPSHOT_DIR="$3"
+# Parse arguments first to handle --help
+parse_arguments "$@"
 
 # Check if running as root
 if [ "$(id -u)" -ne 0 ]; then
@@ -336,6 +398,12 @@ fi
 if ! validate_exclude_patterns "$TEMP_EXCLUDE_FILE" "$VALIDATED_EXCLUDE_FILE"; then
     log_msg "ERROR" "Failed to validate exclude patterns"
     exit 1
+fi
+
+# Log the resolved source directory
+log_msg "INFO" "Source directory: $SOURCE_DIR"
+if [ "$SOURCE_DIR" = "/" ]; then
+    log_msg "INFO" "Using default root filesystem as source"
 fi
 
 # Display backup details

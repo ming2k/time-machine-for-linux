@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source "${LIB_DIR}/core/logging.sh"
+# Logging will be available through loader.sh
 
 # Parse keep list file and generate include patterns for rsync
 parse_keep_list() {

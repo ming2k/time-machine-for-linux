@@ -7,148 +7,54 @@ LIB_DIR="${PROJECT_ROOT}/lib"
 CONFIG_DIR="${PROJECT_ROOT}/config"
 
 # Load libraries
-source "${LIB_DIR}/loader.sh"
+source "${PROJECT_ROOT}/lib/loader.sh"
 if ! load_backup_libs "$LIB_DIR"; then
     echo "Failed to load required libraries" >&2
     exit 1
 fi
 
-# Check for data-backup-keep config file
-KEEPLIST_FILE="${CONFIG_DIR}/data-backup-keep"
-if [ ! -f "$KEEPLIST_FILE" ]; then
-    log_msg "INFO" "No data-backup-keep config found - will backup from current directory"
+# Check for data-backup-map config file
+BACKUP_MAP_FILE="${CONFIG_DIR}/data-backup-map.conf"
+if [ ! -f "$BACKUP_MAP_FILE" ]; then
+    log_msg "ERROR" "Data backup map config not found: $BACKUP_MAP_FILE"
+    log_msg "INFO" "Please create the configuration file with backup source-destination mappings"
+    exit 1
 fi
 
 # Function to display script usage
 usage() {
-    echo -e "${BOLD}Usage:${NC} $0 <source_dir> <backup_path> <snapshot_path>"
+    echo -e "${BOLD}Usage:${NC} $0 --dest <backup_path> --snapshots <snapshot_path> [OPTIONS]"
     echo
-    echo -e "${BOLD}Arguments:${NC}"
-    echo " source_dir    : Source directory to backup"
-    echo " backup_path   : Backup destination path"
-    echo " snapshot_path : Path for creating safety snapshots"
+    echo -e "${BOLD}Required Parameters:${NC}"
+    echo " --dest <path>       : Main backup destination path"
+    echo " --snapshots <path>  : Path for creating safety snapshots"
+    echo
+    echo -e "${BOLD}Options:${NC}"
+    echo " --help, -h          : Show this help message"
+    echo " --config <file>     : Use custom config file (default: data-backup-map.conf)"
     echo
     echo -e "${BOLD}Features:${NC}"
-    echo " • Uses data-backup-keep config (gitignore syntax) for selective backup"
-    echo " • Creates timestamped safety snapshots"
+    echo " • Uses data-backup-map.conf for multiple source-destination mappings"
+    echo " • Each source can have custom ignore patterns and backup modes"
+    echo " • Creates timestamped safety snapshots before backup"
+    echo " • Supports both full and incremental backup modes"
     echo " • Preserves file attributes and permissions"
     echo
+    echo -e "${BOLD}Configuration:${NC}"
+    echo " Edit ${BACKUP_MAP_FILE} to configure:"
+    echo " • Source directories to backup"
+    echo " • Destination subdirectories (under main backup path)"
+    echo " • Ignore patterns for each source"
+    echo " • Backup modes (full or incremental)"
+    echo
     echo -e "${BOLD}Examples:${NC}"
-    echo " $0 /home/user /mnt/backup /mnt/snapshots"
-    echo " $0 . /mnt/backup /mnt/snapshots"
+    echo " $0 --dest /mnt/backup --snapshots /mnt/snapshots"
+    echo " $0 --dest /mnt/backup --snapshots /mnt/snapshots --config custom-map.conf"
+    echo " $0 --help"
     exit 1
 }
 
-# Get backup destination with mount point
-get_backup_dest() {
-    local dst_path="$1"
-    local mount_point="$2"
-    
-    # If destination starts with / and isn't just /, it's an absolute path
-    if [[ "$dst_path" =~ ^/.+ ]]; then
-        echo "${mount_point}${dst_path}"
-    else
-        echo "${mount_point}/${dst_path}"
-    fi
-}
 
-# Function to perform data backup with keep list and incremental support
-data_backup_function() {
-    for i in "${!SOURCES[@]}"; do
-        src="${SOURCES[$i]}"
-        dest_dir=$(get_backup_dest "${DESTINATIONS[$i]}" "$BACKUP_DEST_PATH")
-        excludes="${EXCLUDES[$i]}"
-        keep_list_file="${KEEP_LISTS[$i]:-}"
-        backup_mode="${BACKUP_MODES[$i]:-full}"
-        
-        log_msg "INFO" "Backing up: $src -> $dest_dir (mode: $backup_mode)"
-        
-        # Create destination directory if it doesn't exist
-        mkdir -p "$dest_dir"
-        
-        local rsync_cmd="rsync -aHv --info=progress2"
-        local temp_include_file=""
-        
-        # Handle backup mode
-        if [[ "$backup_mode" == "incremental" ]]; then
-            # Get source name for timestamp tracking
-            local source_name=$(basename "$src")
-            local last_backup_timestamp=$(get_last_backup_timestamp "$BACKUP_DEST_PATH" "$source_name")
-            
-            if [[ -n "$keep_list_file" && -f "$keep_list_file" ]]; then
-                # Incremental backup with keep list
-                log_msg "INFO" "Using keep list config: $keep_list_file"
-                temp_include_file=$(mktemp)
-                
-                if generate_incremental_includes "$src" "$temp_include_file" "$last_backup_timestamp" "$keep_list_file"; then
-                    rsync_cmd+=" --include-from='$temp_include_file'"
-                    log_msg "INFO" "Generated incremental include list"
-                else
-                    log_msg "WARN" "Failed to generate incremental includes, falling back to full backup"
-                    rm -f "$temp_include_file"
-                    temp_include_file=""
-                fi
-            else
-                # Incremental backup without keep list (all changed files)
-                temp_include_file=$(mktemp)
-                
-                if generate_full_incremental "$src" "$temp_include_file" "$last_backup_timestamp"; then
-                    rsync_cmd+=" --include-from='$temp_include_file'"
-                    log_msg "INFO" "Generated incremental backup list"
-                else
-                    log_msg "WARN" "Failed to generate incremental backup, falling back to full backup"
-                    rm -f "$temp_include_file"
-                    temp_include_file=""
-                fi
-            fi
-        elif [[ -n "$keep_list_file" && -f "$keep_list_file" ]]; then
-            # Full backup with keep list
-            log_msg "INFO" "Using keep list config: $keep_list_file"
-            temp_include_file=$(mktemp)
-            
-            if parse_keep_list "$keep_list_file" "$temp_include_file" "$src"; then
-                rsync_cmd+=" --include-from='$temp_include_file'"
-                log_msg "INFO" "Applied keep list filter"
-            else
-                log_msg "WARN" "Failed to parse keep list, backing up everything"
-                rm -f "$temp_include_file"
-                temp_include_file=""
-            fi
-        fi
-        
-        # Add exclude processing for traditional excludes and .backupignore files
-        if [[ -z "$temp_include_file" ]]; then
-            # Only use excludes if not using include filters
-            process_backup_excludes "$src" "$excludes" "$TEMP_EXCLUDE_FILE"
-            [ -s "$TEMP_EXCLUDE_FILE" ] && rsync_cmd+=" --exclude-from='$TEMP_EXCLUDE_FILE'"
-        fi
-        
-        # Run rsync in a subshell and capture its PID
-        eval "$rsync_cmd '$src/' '$dest_dir/'" &
-        RSYNC_PID=$!
-        
-        # Wait for rsync to finish
-        wait $RSYNC_PID
-        local rsync_exit_code=$?
-        
-        # Clean up temporary include file
-        [[ -n "$temp_include_file" ]] && rm -f "$temp_include_file"
-        
-        if [ $rsync_exit_code -ne 0 ]; then
-            log_msg "ERROR" "Backup of $src failed"
-            return 1
-        fi
-        
-        # Update timestamp for incremental backups
-        if [[ "$backup_mode" == "incremental" ]]; then
-            local source_name=$(basename "$src")
-            update_backup_timestamp "$BACKUP_DEST_PATH" "$source_name"
-        fi
-        
-        log_msg "INFO" "Successfully backed up: $src"
-    done
-    return 0
-}
 
 # Handle Ctrl+C interruption
 handle_interrupt() {
@@ -165,22 +71,81 @@ handle_interrupt() {
 # Set up interrupt handler
 trap 'handle_interrupt' SIGINT
 
+# Parse command line arguments
+parse_arguments() {
+    BACKUP_DEST_PATH=""
+    SNAPSHOT_PATH=""
+    CONFIG_FILE="$BACKUP_MAP_FILE"
+    
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --dest)
+                if [ -z "$2" ]; then
+                    log_msg "ERROR" "--dest requires a path argument"
+                    usage
+                fi
+                BACKUP_DEST_PATH="$2"
+                shift 2
+                ;;
+            --snapshots)
+                if [ -z "$2" ]; then
+                    log_msg "ERROR" "--snapshots requires a path argument"
+                    usage
+                fi
+                SNAPSHOT_PATH="$2"
+                shift 2
+                ;;
+            --config)
+                if [ -z "$2" ]; then
+                    log_msg "ERROR" "--config requires a file path argument"
+                    usage
+                fi
+                CONFIG_FILE="$2"
+                shift 2
+                ;;
+            --help|-h)
+                usage
+                ;;
+            -*)
+                log_msg "ERROR" "Unknown option: $1"
+                usage
+                ;;
+            *)
+                log_msg "ERROR" "Unexpected argument: $1"
+                usage
+                ;;
+        esac
+    done
+
+    # Validate required parameters
+    if [ -z "$BACKUP_DEST_PATH" ]; then
+        log_msg "ERROR" "Missing required parameter: --dest"
+        usage
+    fi
+    
+    if [ -z "$SNAPSHOT_PATH" ]; then
+        log_msg "ERROR" "Missing required parameter: --snapshots"
+        usage
+    fi
+    
+    # Update backup map file if custom config specified
+    BACKUP_MAP_FILE="$CONFIG_FILE"
+    if [ ! -f "$BACKUP_MAP_FILE" ]; then
+        log_msg "ERROR" "Config file not found: $BACKUP_MAP_FILE"
+        exit 1
+    fi
+}
+
 # Main script starts here
+
+# Parse command line arguments first to handle --help
+parse_arguments "$@"
 
 # Check if running as root
 if [ "$EUID" -ne 0 ]; then
     log_msg "ERROR" "This script must be run as root"
     exit 1
 fi
-
-# Check arguments
-if [ $# -ne 3 ]; then
-    usage
-fi
-
-SOURCE_DIR="$1"
-BACKUP_DEST_PATH="$2"
-SNAPSHOT_PATH="$3"
 
 # Verify that the snapshot path is a BTRFS subvolume
 if ! is_btrfs_subvolume "$SNAPSHOT_PATH"; then
@@ -191,69 +156,172 @@ fi
 # Print header
 print_banner "DATA BACKUP UTILITY" "$BLUE"
 
-# Initialize arrays for sources and destinations
-declare -a SOURCES=()
-declare -a DESTINATIONS=()
-declare -a EXCLUDES=()
-declare -a KEEP_LISTS=()
-declare -a BACKUP_MODES=()
+# Initialize variables for temporary files
+TEMP_EXCLUDE_FILE=""
 
 # Flag to track if backup was interrupted
 BACKUP_INTERRUPTED=false
 
-# Simple backup function using keep list
-simple_backup_function() {
-    local rsync_cmd="rsync -aAXHv --info=progress2"
+# Map-based backup function
+map_based_backup_function() {
+    # Parse the backup map configuration
+    local -a sources=()
+    local -a destinations=()
+    local -a ignore_patterns=()
+    local -a backup_modes=()
     
-    # Apply keep list if it exists
-    if [ -f "$KEEPLIST_FILE" ]; then
-        log_msg "INFO" "Using keep list config: $KEEPLIST_FILE"
-        local temp_include_file=$(mktemp)
-        trap 'rm -f "$temp_include_file"' EXIT
-        
-        if parse_keep_list "$KEEPLIST_FILE" "$temp_include_file" "$SOURCE_DIR"; then
-            rsync_cmd+=" --include-from='$temp_include_file'"
-            log_msg "INFO" "Applied keep list filter"
-        else
-            log_msg "WARNING" "Failed to parse keep list, backing up everything"
-            rm -f "$temp_include_file"
-        fi
-    else
-        log_msg "INFO" "No keep list found, backing up everything"
+    if ! parse_data_backup_map "$BACKUP_MAP_FILE" sources destinations ignore_patterns backup_modes "false"; then
+        log_msg "ERROR" "Failed to parse backup map configuration"
+        return 1
     fi
     
-    # Execute rsync
-    log_msg "INFO" "Starting backup: $SOURCE_DIR -> $BACKUP_DEST_PATH"
-    eval "$rsync_cmd '$SOURCE_DIR/' '$BACKUP_DEST_PATH/'"
-    local rsync_status=$?
+    local total_entries=${#sources[@]}
+    local successful_backups=0
+    local failed_backups=0
     
-    if [ $rsync_status -eq 0 ]; then
-        log_msg "SUCCESS" "Backup completed successfully"
+    log_msg "INFO" "Starting backup of $total_entries configured sources"
+    
+    # Process each backup entry
+    for ((i=0; i<total_entries; i++)); do
+        local source_path="${sources[i]}"
+        local dest_subdir="${destinations[i]}"
+        local ignore_pattern="${ignore_patterns[i]}"
+        local backup_mode="${backup_modes[i]}"
+        local full_dest_path="$BACKUP_DEST_PATH/$dest_subdir"
+        
+        log_msg "INFO" "Processing entry $((i+1))/$total_entries"
+        log_msg "INFO" "Source: $source_path"
+        log_msg "INFO" "Destination: $full_dest_path"
+        log_msg "INFO" "Mode: $backup_mode"
+        
+        # Check if source exists
+        if [ ! -d "$source_path" ]; then
+            log_msg "WARNING" "Source directory does not exist: $source_path, skipping"
+            ((failed_backups++))
+            continue
+        fi
+        
+        # Create destination directory if it doesn't exist
+        if ! mkdir -p "$full_dest_path"; then
+            log_msg "ERROR" "Failed to create destination directory: $full_dest_path"
+            ((failed_backups++))
+            continue
+        fi
+        
+        # Execute backup for this entry
+        if backup_single_source "$source_path" "$full_dest_path" "$ignore_pattern" "$backup_mode"; then
+            log_msg "SUCCESS" "Backup completed for: $source_path"
+            ((successful_backups++))
+        else
+            log_msg "ERROR" "Backup failed for: $source_path"
+            ((failed_backups++))
+        fi
+        
+        echo # Add spacing between entries
+    done
+    
+    # Summary
+    log_msg "INFO" "Backup summary: $successful_backups successful, $failed_backups failed"
+    
+    if [ $failed_backups -eq 0 ]; then
+        log_msg "SUCCESS" "All backup operations completed successfully"
         return 0
+    elif [ $successful_backups -gt 0 ]; then
+        log_msg "WARNING" "Some backup operations failed"
+        return 1
     else
-        log_msg "ERROR" "Backup failed with status $rsync_status"
+        log_msg "ERROR" "All backup operations failed"
         return 1
     fi
 }
 
+# Backup a single source directory
+backup_single_source() {
+    local source_path="$1"
+    local dest_path="$2"
+    local ignore_pattern="$3"
+    local backup_mode="$4"
+    
+    local rsync_cmd="rsync -aAXHv --info=progress2"
+    local temp_exclude_file=""
+    
+    # Process ignore patterns if provided
+    if [ -n "$ignore_pattern" ]; then
+        temp_exclude_file=$(mktemp)
+        trap 'rm -f "$temp_exclude_file"' RETURN
+        
+        # Convert comma-separated patterns to exclude file format
+        echo "$ignore_pattern" | tr ',' '\n' | while IFS= read -r pattern; do
+            [ -n "$pattern" ] && echo "$pattern" >> "$temp_exclude_file"
+        done
+        
+        if [ -s "$temp_exclude_file" ]; then
+            rsync_cmd+=" --exclude-from=\"$temp_exclude_file\""
+            log_msg "INFO" "Applied ignore patterns: $ignore_pattern"
+        fi
+    fi
+    
+    # Handle different backup modes
+    case "$backup_mode" in
+        "incremental")
+            # For incremental, we could add timestamp-based logic here
+            # For now, we'll use rsync's built-in incremental capabilities
+            log_msg "INFO" "Using incremental mode (rsync will only copy changed files)"
+            ;;
+        "mirror")
+            # Mirror mode creates an exact copy and removes files not in source
+            rsync_cmd+=" --delete --delete-excluded"
+            log_msg "INFO" "Using mirror mode (will delete files not in source)"
+            log_msg "WARNING" "Mirror mode will remove files from destination not present in source"
+            ;;
+        "full"|*)
+            log_msg "INFO" "Using full mode (copy all files, keep existing)"
+            ;;
+    esac
+    
+    # Execute rsync
+    log_msg "INFO" "Executing: rsync from '$source_path' to '$dest_path'"
+    eval "$rsync_cmd '$source_path/' '$dest_path/'"
+    local rsync_status=$?
+    
+    # Clean up temp file
+    [ -n "$temp_exclude_file" ] && rm -f "$temp_exclude_file"
+    
+    return $rsync_status
+}
+
 # Display backup details
-log_msg "INFO" "Source: $SOURCE_DIR"
-log_msg "INFO" "Destination: $BACKUP_DEST_PATH"
-log_msg "INFO" "Snapshots: $SNAPSHOT_PATH"
-if [ -f "$KEEPLIST_FILE" ]; then
-    log_msg "INFO" "Keep list config: $KEEPLIST_FILE"
+log_msg "INFO" "Main backup destination: $BACKUP_DEST_PATH"
+log_msg "INFO" "Snapshots path: $SNAPSHOT_PATH"
+log_msg "INFO" "Configuration file: $BACKUP_MAP_FILE"
+
+# Parse and display backup map summary
+declare -a sources=()
+declare -a destinations=()
+declare -a ignore_patterns=()
+declare -a backup_modes=()
+
+if parse_data_backup_map "$BACKUP_MAP_FILE" sources destinations ignore_patterns backup_modes "false"; then
+    log_msg "INFO" "Backup plan:"
+    for ((i=0; i<${#sources[@]}; i++)); do
+        local source_exists=""
+        [ -d "${sources[i]}" ] && source_exists="✓" || source_exists="✗"
+        log_msg "INFO" "  [$((i+1))] $source_exists ${sources[i]} → ${destinations[i]}/ (${backup_modes[i]})"
+        [ -n "${ignore_patterns[i]}" ] && log_msg "INFO" "      Ignoring: ${ignore_patterns[i]}"
+    done
 else
-    log_msg "INFO" "Keep list config: none (backup everything)"
+    log_msg "ERROR" "Failed to parse backup configuration"
+    exit 1
 fi
 
 # Ask for confirmation before proceeding
-if ! confirm_execution "data backup" "n"; then
+if ! confirm_execution "map-based data backup" "n"; then
     log_msg "INFO" "Backup operation cancelled by user"
     exit 1
 fi
 
 # Perform backup with snapshots
-if execute_backup_with_snapshots "$BACKUP_DEST_PATH" "$SNAPSHOT_PATH" simple_backup_function; then
+if execute_backup_with_snapshots "$BACKUP_DEST_PATH" "$SNAPSHOT_PATH" map_based_backup_function; then
     show_backup_results "true" "$SNAPSHOT_PATH" "$TIMESTAMP"
     exit 0
 else

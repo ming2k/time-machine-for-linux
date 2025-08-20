@@ -1,6 +1,6 @@
 # Senstive Info
-data-backup-keep
 system-backup-ignore
+data-backup-map.conf
 
 # Logs
 var/log/*.log

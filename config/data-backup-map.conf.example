@@ -1,0 +1,47 @@
+# Data Backup Map Configuration Example
+# Format: Each backup entry is defined using shell-friendly variables
+# 
+# BACKUP_ENTRY_<N>_SOURCE="/path/to/source"
+# BACKUP_ENTRY_<N>_DEST="subdirectory_name"  # relative to backup destination
+# BACKUP_ENTRY_<N>_IGNORE="pattern1,pattern2,pattern3"  # optional, comma-separated patterns
+# BACKUP_ENTRY_<N>_MODE="full"  # optional: full (default), incremental, or mirror
+#
+# The DEST is a subdirectory under the main backup destination path
+# Ignore patterns use gitignore syntax (*, **, negation with !)
+
+# Example entries:
+
+# User home directory (excluding downloads and caches)
+BACKUP_ENTRY_1_SOURCE="/home/username"
+BACKUP_ENTRY_1_DEST="home_username" 
+BACKUP_ENTRY_1_IGNORE="Downloads/,downloads/,.cache/,*.tmp,*.log"
+BACKUP_ENTRY_1_MODE="incremental"
+
+# Important documents folder
+BACKUP_ENTRY_2_SOURCE="/home/username/Documents"
+BACKUP_ENTRY_2_DEST="documents"
+BACKUP_ENTRY_2_MODE="full"
+
+# Media collection
+BACKUP_ENTRY_3_SOURCE="/home/username/Media"
+BACKUP_ENTRY_3_DEST="media"
+BACKUP_ENTRY_3_IGNORE="*.tmp,*.partial"
+BACKUP_ENTRY_3_MODE="incremental"
+
+# Projects directory (excluding build artifacts)
+BACKUP_ENTRY_4_SOURCE="/home/username/Projects"
+BACKUP_ENTRY_4_DEST="projects"
+BACKUP_ENTRY_4_IGNORE="node_modules/,target/,build/,dist/,.git/"
+BACKUP_ENTRY_4_MODE="incremental"
+
+# System configuration files
+BACKUP_ENTRY_5_SOURCE="/etc"
+BACKUP_ENTRY_5_DEST="system_config"
+BACKUP_ENTRY_5_IGNORE="shadow,shadow-,gshadow,gshadow-,passwd-,group-"
+BACKUP_ENTRY_5_MODE="full"
+
+# Website/project directory (exact mirror)
+BACKUP_ENTRY_6_SOURCE="/var/www"
+BACKUP_ENTRY_6_DEST="www"
+BACKUP_ENTRY_6_IGNORE="*.log,tmp/"
+BACKUP_ENTRY_6_MODE="mirror"
