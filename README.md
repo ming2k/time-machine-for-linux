@@ -4,17 +4,31 @@
 [![Shell](https://img.shields.io/badge/Shell-Bash-green.svg)](https://www.gnu.org/software/bash/)
 [![BTRFS](https://img.shields.io/badge/Filesystem-BTRFS-blue.svg)](https://btrfs.wiki.kernel.org/)
 
-[English](README.md) | [中文](README.zh.md)
-
-A simple backup solution for Linux systems providing Apple Time Machine-like functionality. Separates system backup (slim & complete) from data backup (comprehensive & selective).
+A simple backup solution for Linux systems providing Apple Time Machine-like functionality. Separates system backup from data backup.
 
 ## How to Use
 
 ### System Backup
 ```bash
-# Backup your complete system (excluding media files)
+# Basic system backup (complete system excluding media files)
+sudo ./bin/system-backup.sh --source / --dest /mnt/@root --snapshots /mnt/@snapshots
+
+# Alternative syntax (positional arguments)
 sudo ./bin/system-backup.sh / /mnt/@root /mnt/@snapshots
+
+# Backup specific system directory
+sudo ./bin/system-backup.sh --source /etc --dest /mnt/@etc --snapshots /mnt/@snapshots
+
+# Show what would be backed up without executing
+sudo ./bin/system-backup.sh --source / --dest /mnt/@root --snapshots /mnt/@snapshots --dry-run
 ```
+
+**System Backup Features:**
+- **Blacklist approach**: Backs up everything except excluded patterns
+- **BTRFS snapshots**: Creates pre-backup snapshots for safety
+- **Efficient transfers**: Uses rsync with progress reporting
+- **Smart exclusions**: Automatically excludes virtual filesystems, temp files, and media
+- **User confirmation**: Shows preview before execution
 ### Data Backup - Multiple Sources & Destinations
 ```bash
 # Backup multiple sources with individual configurations
@@ -79,7 +93,7 @@ BACKUP_ENTRY_2_MODE="full"
 
 # Media collection
 BACKUP_ENTRY_3_SOURCE="/home/user/Media"
-BACKUP_ENTRY_3_DEST="media" 
+BACKUP_ENTRY_3_DEST="media"
 BACKUP_ENTRY_3_IGNORE="*.tmp,*.partial"
 BACKUP_ENTRY_3_MODE="incremental"
 
