@@ -2,18 +2,29 @@
 # This file contains gitignore-style patterns for files and directories
 # to exclude from system backups. Patterns support wildcards and negation.
 
+# Lost+found directories
+lost+found/
+
 # Virtual filesystems and special directories
+/proc/*
 /proc/*
 /sys/*
 /dev/*
 /run/*
-/tmp/*
-/var/tmp/*
+/run/.*
 
-# Network filesystems and mounts
+/tmp/*
+/tmp/.*
+/var/tmp/*
+/var/tmp/.*
+
+# Non-local file system
 /mnt/*
 /media/*
 /net/*
+
+# Snapshots if it exists
+/snapshots/
 
 # Boot and EFI partitions (usually backed up separately)
 /boot/efi/*
@@ -44,18 +55,28 @@
 /var/lib/systemd/coredump/*
 
 # Database runtime files
-/var/lib/mysql/*.pid
-/var/lib/postgresql/*/postmaster.pid
+/var/lib/mysql/
+/var/lib/postgres/
+
+# Flatpak and Snap runtime data
+/var/lib/flatpak/runtime/*
+/var/lib/snapd/snaps/*
+/snap/*/
 
 # Container runtime data
 /var/lib/docker/containers/*/
 /var/lib/containerd/io.containerd.runtime.v*/
 /var/lib/lxc/*/rootfs/
+/var/lib/containers/cache/*
+/var/lib/containers/storage/overlay-images/*
+/var/lib/containers/storage/overlay-layers/*
 
 # User cache and temporary directories
 /home/*/.cache/*
 /home/*/.local/share/Trash/*
-/home/*/tmp/*
+/home/*/.local/share/containers/cache/*
+
+# Gnome Desktop files
 /home/*/.thumbnails/*
 /home/*/.gvfs/*
 
@@ -67,42 +88,23 @@
 
 # Development temporary files
 /home/*/.npm/_cacache/*
-/home/*/node_modules/*/
+/home/*/.npm/_cacache/.*
 /home/*/.cargo/registry/*
+/home/*/.cargo/registry/.*
 /home/*/.gradle/caches/*
+/home/*/.gradle/caches/.*
 /home/*/.m2/repository/*
+/home/*/.m2/repository/.*
+/home/*/.local/share/containers/storage/overlay/*
+/home/*/.local/share/containers/storage/overlay/.*
 
 # IDE and editor temporary files
 /home/*/.vscode/extensions/*/
 /home/*/.local/share/JetBrains/*/
-*.tmp
-*.temp
-*~
-.#*
-\#*\#
-
-# Lost+found directories
-lost+found/
 
 # Large media files that may be duplicates
-/home/*/Downloads/*.iso
-/home/*/Downloads/*.img
-/home/*/Downloads/*.dmg
-
-# Virtual machine disk images (usually too large)
-*.vmdk
-*.vdi
-*.qcow2
-*.img
-
-# Steam and game data (often re-downloadable)
-/home/*/.local/share/Steam/steamapps/common/*
-/home/*/.steam/steam/steamapps/common/*
-
-# Flatpak and Snap runtime data
-/var/lib/flatpak/runtime/*
-/var/lib/snapd/snaps/*
-/snap/*/
+/home/*/Downloads/*
+/home/*/Downloads/.*
 
 # Negation examples (uncomment to include specific items)
 # !/var/log/important.log
