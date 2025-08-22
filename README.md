@@ -4,62 +4,79 @@
 [![Shell](https://img.shields.io/badge/Shell-Bash-green.svg)](https://www.gnu.org/software/bash/)
 [![BTRFS](https://img.shields.io/badge/Filesystem-BTRFS-blue.svg)](https://btrfs.wiki.kernel.org/)
 
-A simple backup solution for Linux systems providing Apple Time Machine-like functionality. Separates system backup from data backup.
+A safe, simple, less dependency and opinionated backup solution for Linux systems inspired by Apple Time Machine.
 
-## How to Use
+> [!IMPORTANT]
+> There are !!!RISKS!!! in manipulating data. Please pay attention to data security before ensuring that the solution can work properly.
+
+## Prerequisites
+- A storage medium with a storage capacity larger than the data to be backed up
+- Linux with `rsync` and `btrfs`(from btrfs-progs) commands
+- Root privileges for system operations
+
+## Backup Storage Medium Setup
+> [!IMPORTANT]
+> Please set up the partition scheme in advance and reserve one partition as a backup partition.
+
+### TL;DR
+
+```sh
+# Format device with LUKS encryption + BTRFS with subvolumes
+sudo ./tools/format-btrfs-luks.sh -d /dev/sdX
+```
+
+**⚠️ Warning**: The format tool will **DESTROY ALL DATA** on the specified device!
+
+### More About Backup Storage Medium Setup
+
+This project opinionatedly uses btrfs as the filesystem and creates expected subvolumes, while also opinionatedly using LUKS encryption.
+The project will assume that you agree with and may have already adopted this behavior to perform a series of the project operations.
+We do not recommend using configurations outside of this convention - they might work, but could pose potential risks.
+
+#### BTRFS Subvolumes
+```bash
+# Create subvolumes
+sudo btrfs subvolume create /mnt/@root
+sudo btrfs subvolume create /mnt/@data
+sudo btrfs subvolume create /mnt/@snapshots
+```
+
+#### LUKS Setup
+```bash
+sudo cryptsetup open /dev/sdX encrypted_root
+sudo mount /dev/mapper/encrypted_root /mnt
+```
+
+## How to Use Regularly
+
+The above backup storage media settings will only be used once to initialize the media. This section is a common reference for future backups.
+
+*To prevent the temperature from being too high, the copy rate is limited. Please modify the agument of `--bwlimit` if necessary.*
+
+### Mount
+Mounting with zstd reduces read and write traffic to extend storage medium life.
+
+```sh
+# Mount LUKS device with BTRFS+zstd compression
+sudo ./tools/mountctl.sh -b /dev/sdX -p /mnt/point
+# Mount with custom compression level and LUKS name
+sudo ./tools/mountctl.sh -b /dev/sdX -p /mnt/point --level 5
+ --luks-name my-backup
+# Unmount and close LUKS
+sudo ./tools/mountctl.sh -u /mnt/point
+```
 
 ### System Backup
+
+#### TL;DR
 ```bash
 # Basic system backup (complete system excluding media files)
-sudo ./bin/system-backup.sh --source / --dest /mnt/@root --snapshots /mnt/@snapshots
-
-# Alternative syntax (positional arguments)
-sudo ./bin/system-backup.sh / /mnt/@root /mnt/@snapshots
-
-# Backup specific system directory
-sudo ./bin/system-backup.sh --source /etc --dest /mnt/@etc --snapshots /mnt/@snapshots
-
-# Show what would be backed up without executing
-sudo ./bin/system-backup.sh --source / --dest /mnt/@root --snapshots /mnt/@snapshots --dry-run
+sudo ./bin/system-backup.sh --source / --dest /mnt/point/@ --snapshots /mnt/point/@snapshots
 ```
+#### System Backup Config
 
-**System Backup Features:**
-- **Blacklist approach**: Backs up everything except excluded patterns
-- **BTRFS snapshots**: Creates pre-backup snapshots for safety
-- **Efficient transfers**: Uses rsync with progress reporting
-- **Smart exclusions**: Automatically excludes virtual filesystems, temp files, and media
-- **User confirmation**: Shows preview before execution
-### Data Backup - Multiple Sources & Destinations
-```bash
-# Backup multiple sources with individual configurations
-sudo ./bin/data-backup.sh --dest /mnt/@data --snapshots /mnt/@snapshots
+`config/system-backup-ignore`
 
-# Using custom configuration file
-sudo ./bin/data-backup.sh --dest /mnt/@data --snapshots /mnt/@snapshots --config custom-map.conf
-```
-## Backup Principles
-
-### System Backup (Blacklist - Exclude What You Don't Need)
-- **Goal**: Complete system preservation for full recovery
-- **Method**: Backup everything EXCEPT excluded items
-- **Strategy**: Keep it slim by excluding:
-  - Large Data files (AI Models, Music, Videos and so on)
-  - Temporary files and caches
-  - Virtual filesystems (/proc, /sys, /dev)
-  - Files that cause redundant (/home/*/{Downloads,downloads}, /mnt, /snapshots if it exists )
-
-### Data Backup (Map-Based - Multiple Sources with Custom Rules)
-- **Goal**: Flexible backup of multiple directories with individual control
-- **Method**: Source-destination mapping with per-source ignore patterns and backup modes
-- **Strategy**: Organized backup with:
-  - Multiple source directories mapped to subdirectories
-  - Individual ignore patterns per source (gitignore syntax)
-  - Choice of backup modes: full, incremental, or mirror
-  - Centralized configuration in `config/data-backup-map.conf`
-
-## Configuration
-
-### System Backup Config - `config/system-backup-ignore`
 ```bash
 # Exclude media files (put them in data backup instead)
 /home/*/Music/
@@ -76,7 +93,27 @@ sudo ./bin/data-backup.sh --dest /mnt/@data --snapshots /mnt/@snapshots --config
 *.cache
 ```
 
-### Data Backup Config - `config/data-backup-map.conf`
+**System Backup Features:**
+- **Blacklist approach**: Backs up everything except excluded patterns
+- **BTRFS snapshots**: Creates pre-backup snapshots for safety
+- **Efficient transfers**: Uses rsync with progress reporting
+- **Smart exclusions**: Automatically excludes virtual filesystems, temp files, and media
+- **User confirmation**: Shows preview before execution
+
+### Data Backup
+
+#### TL;DR
+
+```bash
+# Backup multiple sources with individual configurations
+sudo ./bin/data-backup.sh --dest /mnt/@data --snapshots /mnt/@snapshots
+# Using custom configuration file
+sudo ./bin/data-backup.sh --dest /mnt/@data --snapshots /mnt/@snapshots --config custom-map.conf
+```
+
+#### Data Backup Config
+
+`config/data-backup-map.conf`
 ```bash
 # Map-based configuration with shell variables
 
@@ -108,56 +145,26 @@ BACKUP_ENTRY_4_MODE="mirror"  # Will delete files not in source
 - **incremental**: Only copy changed files (uses rsync's change detection)
 - **mirror**: Create exact mirror, removes files not present in source
 
-## Installation
 
-### Quick Start
-```bash
-git clone https://github.com/ming2k/time-machine-for-linux.git
-cd time-machine-for-linux
+## Backup Principles
 
-# Configure data backup sources (edit config/data-backup-map.conf)
-# See examples in config/data-backup-map.conf.example
+### System Backup (Blacklist - Exclude What You Don't Need)
+- **Goal**: Complete system preservation for full recovery
+- **Method**: Backup everything EXCEPT excluded items
+- **Strategy**: Keep it slim by excluding:
+  - Large Data files (AI Models, Music, Videos and so on)
+  - Temporary files and caches
+  - Virtual filesystems (/proc, /sys, /dev)
+  - Files that cause redundant (/home/*/{Downloads,downloads}, /mnt, /snapshots if it exists )
 
-# Run system backup
-sudo ./bin/system-backup.sh --source / --dest /mnt/@root --snapshots /mnt/@snapshots
-
-# Run data backup (multiple sources)
-sudo ./bin/data-backup.sh --dest /mnt/@data --snapshots /mnt/@snapshots
-```
-
-### Prerequisites
-- Linux with `rsync` and `btrfs` commands
-- BTRFS filesystem for backup destination
-- Root privileges for system operations
-
-### BTRFS Setup
-
-#### Option 1: Simple BTRFS Setup
-```bash
-# Create subvolumes
-sudo btrfs subvolume create /mnt/@root
-sudo btrfs subvolume create /mnt/@data
-sudo btrfs subvolume create /mnt/@snapshots
-```
-
-#### Option 2: Encrypted BTRFS+LUKS Setup
-Use the provided tool for secure encrypted backup storage:
-
-```bash
-# Format device with LUKS encryption + BTRFS with subvolumes
-sudo ./tools/format-btrfs-luks.sh -d /dev/sdX
-
-# After setup, mount the encrypted filesystem:
-sudo cryptsetup open /dev/sdX encrypted_root
-sudo mount /dev/mapper/encrypted_root /mnt
-
-# Create additional subvolumes for backups:
-sudo btrfs subvolume create /mnt/@root     # System backups
-sudo btrfs subvolume create /mnt/@data     # Data backups
-sudo btrfs subvolume create /mnt/@snapshots # Backup snapshots
-```
-
-**⚠️ Warning**: The format tool will **DESTROY ALL DATA** on the specified device!
+### Data Backup (Map-Based - Multiple Sources with Custom Rules)
+- **Goal**: Flexible backup of multiple directories with individual control
+- **Method**: Source-destination mapping with per-source ignore patterns and backup modes
+- **Strategy**: Organized backup with:
+  - Multiple source directories mapped to subdirectories
+  - Individual ignore patterns per source (gitignore syntax)
+  - Choice of backup modes: full, incremental, or mirror
+  - Centralized configuration in `config/data-backup-map.conf`
 
 ## Why This Approach?
 

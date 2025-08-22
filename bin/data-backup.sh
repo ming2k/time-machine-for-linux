@@ -242,7 +242,7 @@ backup_single_source() {
     local ignore_pattern="$3"
     local backup_mode="$4"
     
-    local rsync_cmd="rsync -aAXHv --info=progress2"
+    local rsync_cmd="rsync -aAXHv --info=progress2 --bwlimit=10000"
     local temp_exclude_file=""
     
     # Process ignore patterns if provided
