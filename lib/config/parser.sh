@@ -49,7 +49,7 @@ parse_backup_maps() {
         backup_mode=$(echo "$backup_mode" | xargs)
         
         # Set defaults
-        [[ -z "$backup_mode" ]] && backup_mode="full"
+        [[ -z "$backup_mode" ]] && backup_mode="incremental"
         
         # Validate source path
         if [ -z "$src_path" ]; then
@@ -70,9 +70,9 @@ parse_backup_maps() {
         fi
         
         # Validate backup mode
-        if [[ "$backup_mode" != "full" && "$backup_mode" != "incremental" ]]; then
-            log_msg "WARNING" "Line $line_num: Invalid backup mode '$backup_mode', using 'full'"
-            backup_mode="full"
+        if [[ "$backup_mode" != "incremental" && "$backup_mode" != "mirror" ]]; then
+            log_msg "WARNING" "Line $line_num: Invalid backup mode '$backup_mode', using 'incremental'"
+            backup_mode="incremental"
         fi
         
         # Add to valid entries
@@ -234,7 +234,7 @@ parse_data_backup_map() {
         local source_path="${!source_var:-}"
         local dest_path="${!dest_var:-}"
         local ignore_pattern="${!ignore_var:-}"
-        local backup_mode="${!mode_var:-full}"
+        local backup_mode="${!mode_var:-incremental}"
         
         # Validate required fields
         if [ -z "$source_path" ]; then
@@ -254,9 +254,9 @@ parse_data_backup_map() {
         fi
         
         # Validate backup mode
-        if [[ "$backup_mode" != "full" && "$backup_mode" != "incremental" && "$backup_mode" != "mirror" ]]; then
-            log_msg "WARNING" "Entry $entry_num: Invalid backup mode '$backup_mode', using 'full'"
-            backup_mode="full"
+        if [[ "$backup_mode" != "incremental" && "$backup_mode" != "mirror" ]]; then
+            log_msg "WARNING" "Entry $entry_num: Invalid backup mode '$backup_mode', using 'incremental'"
+            backup_mode="incremental"
         fi
         
         # Add to arrays
@@ -271,6 +271,93 @@ parse_data_backup_map() {
     
     if [ $valid_entries -eq 0 ]; then
         log_msg "ERROR" "No valid backup entries processed"
+        return 1
+    fi
+    
+    log_msg "INFO" "Successfully parsed $valid_entries backup entries"
+    return 0
+}
+
+# Parse pipe-delimited data backup map configuration (new format)
+parse_pipe_delimited_backup_map() {
+    local config_file="$1"
+    local -n sources_ref="$2"
+    local -n destinations_ref="$3"
+    local -n excludes_ref="$4"
+    local -n backup_modes_ref="$5"
+    local validate_paths="${6:-true}"
+    
+    if [ ! -f "$config_file" ]; then
+        log_msg "ERROR" "Config file not found: $config_file"
+        return 1
+    fi
+    
+    if [ ! -s "$config_file" ]; then
+        log_msg "ERROR" "Config file is empty: $config_file"
+        return 1
+    fi
+    
+    log_msg "INFO" "Parsing pipe-delimited backup map: $config_file"
+    
+    local line_num=0
+    local valid_entries=0
+    
+    while IFS= read -r line; do
+        ((line_num++))
+        
+        # Skip empty lines and comments
+        if [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]]; then
+            continue
+        fi
+        
+        # Split line into components (source|dest|ignore_patterns|mode)
+        IFS='|' read -r src_path dst_path ignore_pattern backup_mode <<< "$line"
+        
+        # Trim whitespace
+        src_path=$(echo "$src_path" | xargs)
+        dst_path=$(echo "$dst_path" | xargs)
+        ignore_pattern=$(echo "$ignore_pattern" | xargs)
+        backup_mode=$(echo "$backup_mode" | xargs)
+        
+        # Set defaults
+        [[ -z "$backup_mode" ]] && backup_mode="incremental"
+        
+        # Validate source path
+        if [ -z "$src_path" ]; then
+            log_msg "WARNING" "Line $line_num: Missing source path, skipping"
+            continue
+        fi
+        
+        # Validate destination path
+        if [ -z "$dst_path" ]; then
+            log_msg "WARNING" "Line $line_num: Missing destination path, skipping"
+            continue
+        fi
+        
+        # Check if source exists (if requested)
+        if [ "$validate_paths" = "true" ] && [ ! -d "$src_path" ]; then
+            log_msg "WARNING" "Line $line_num: Source directory does not exist: $src_path"
+            continue
+        fi
+        
+        # Validate backup mode
+        if [[ "$backup_mode" != "incremental" && "$backup_mode" != "mirror" ]]; then
+            log_msg "WARNING" "Line $line_num: Invalid backup mode '$backup_mode', using 'incremental'"
+            backup_mode="incremental"
+        fi
+        
+        # Add to arrays
+        sources_ref+=("$src_path")
+        destinations_ref+=("$dst_path")
+        excludes_ref+=("$ignore_pattern")
+        backup_modes_ref+=("$backup_mode")
+        
+        ((valid_entries++))
+        log_msg "INFO" "Entry: $src_path -> $dst_path (mode: $backup_mode)"
+    done < "$config_file"
+    
+    if [ $valid_entries -eq 0 ]; then
+        log_msg "ERROR" "No valid backup entries found"
         return 1
     fi
     

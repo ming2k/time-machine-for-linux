@@ -17,13 +17,13 @@ fi
 CONFIG_FILE="${CONFIG_DIR}/system-backup-ignore"
 if [ -f "$CONFIG_FILE" ]; then
     log_msg "INFO" "Found system backup config: $CONFIG_FILE"
-    
+
     # Quick config file validation
     if [ ! -r "$CONFIG_FILE" ]; then
         log_msg "ERROR" "Config file exists but is not readable: $CONFIG_FILE"
         exit 1
     fi
-    
+
     # Check file size
     config_size=$(stat -f%z "$CONFIG_FILE" 2>/dev/null || stat -c%s "$CONFIG_FILE" 2>/dev/null || echo 0)
     if [ "$config_size" -eq 0 ]; then
@@ -40,13 +40,13 @@ fi
 check_required_commands() {
     local required_commands=("rsync" "btrfs")
     local missing_commands=()
-    
+
     for cmd in "${required_commands[@]}"; do
         if ! command -v "$cmd" >/dev/null 2>&1; then
             missing_commands+=("$cmd")
         fi
     done
-    
+
     if [ ${#missing_commands[@]} -gt 0 ]; then
         log_msg "ERROR" "Missing required commands: ${missing_commands[*]}"
         return 1
@@ -59,23 +59,23 @@ check_disk_space() {
     local source_dir="$1"
     local dest_dir="$2"
     local required_space
-    
+
     # Get source directory size
     required_space=$(du -sb "$source_dir" | cut -f1)
-    
+
     # Get available space in destination
     local available_space=$(df -B1 "$dest_dir" | awk 'NR==2 {print $4}')
-    
+
     # Add 10% buffer
     required_space=$((required_space * 11 / 10))
-    
+
     if [ "$required_space" -gt "$available_space" ]; then
         log_msg "ERROR" "Insufficient disk space in destination"
         log_msg "ERROR" "Required: $(numfmt --to=iec-i --suffix=B "$required_space")"
         log_msg "ERROR" "Available: $(numfmt --to=iec-i --suffix=B "$available_space")"
         return 1
     fi
-    
+
     return 0
 }
 
@@ -107,36 +107,36 @@ usage() {
 validate_exclude_patterns() {
     local exclude_file="$1"
     local validated_file="$2"
-    
+
     if [ ! -f "$exclude_file" ] || [ ! -s "$exclude_file" ]; then
         log_msg "INFO" "No exclude patterns to validate"
         touch "$validated_file"
         return 0
     fi
-    
+
     log_msg "INFO" "Validating and optimizing exclude patterns"
-    
+
     local invalid_patterns=0
     local duplicates_removed=0
     local patterns_processed=0
-    
+
     # Use associative array to track duplicates (requires bash 4+)
     declare -A seen_patterns
-    
+
     while IFS= read -r line; do
         # Skip empty lines and comments
         [[ -z "${line// }" ]] && continue
         [[ "$line" =~ ^[[:space:]]*# ]] && continue
-        
+
         patterns_processed=$((patterns_processed + 1))
-        
+
         # Basic pattern validation
         if [[ ${#line} -gt 1000 ]]; then
             log_msg "WARNING" "Skipping overly long pattern (${#line} chars): ${line:0:50}..."
             invalid_patterns=$((invalid_patterns + 1))
             continue
         fi
-        
+
         # Check for duplicate patterns
         local normalized_pattern="${line// }"
         if [[ -n "${seen_patterns[$normalized_pattern]:-}" ]]; then
@@ -144,34 +144,34 @@ validate_exclude_patterns() {
             continue
         fi
         seen_patterns["$normalized_pattern"]=1
-        
+
         # Add validated pattern
         echo "$line" >> "$validated_file"
-        
+
     done < "$exclude_file"
-    
+
     local final_patterns=$(grep -v '^[[:space:]]*$' "$validated_file" 2>/dev/null | wc -l)
-    
+
     log_msg "INFO" "Pattern validation complete:"
     log_msg "INFO" "  Patterns processed: $patterns_processed"
     log_msg "INFO" "  Final patterns: $final_patterns"
     [ "$duplicates_removed" -gt 0 ] && log_msg "INFO" "  Duplicates removed: $duplicates_removed"
     [ "$invalid_patterns" -gt 0 ] && log_msg "WARNING" "  Invalid patterns skipped: $invalid_patterns"
-    
+
     return 0
 }
 
 # Function to perform system backup
 system_backup_function() {
-    local rsync_cmd="rsync -aAXHv --info=progress2 --bwlimit=10000"
+    local rsync_cmd="rsync -aAXHv --info=progress2 --bwlimit=30000"
     [ "$delete_flag" = "true" ] && rsync_cmd+=" --delete"
     [ -s "$VALIDATED_EXCLUDE_FILE" ] && rsync_cmd+=" --exclude-from='$VALIDATED_EXCLUDE_FILE'"
-    
+
     # Execute rsync with progress visible and error capture
     local rsync_status
     eval "$rsync_cmd '$SOURCE_DIR/' '$BACKUP_DIR/'" 2> >(tee -a >(grep -v '^[[:space:]]*$' >&2) > /dev/null) | tee /dev/tty
     rsync_status=${PIPESTATUS[0]}
-    
+
     # Handle specific rsync error codes
     case $rsync_status in
         0)  # Success
@@ -192,13 +192,13 @@ system_backup_function() {
             return 1
             ;;
     esac
-    
+
     # Verify backup integrity
     if ! verify_backup_integrity "$SOURCE_DIR" "$BACKUP_DIR"; then
         log_msg "ERROR" "Backup integrity verification failed"
         return 1
     fi
-    
+
     return 0
 }
 
@@ -206,7 +206,7 @@ system_backup_function() {
 verify_backup_integrity() {
     local source="$1"
     local dest="$2"
-    
+
     # Check if essential directories exist
     local essential_dirs=("bin" "etc" "usr" "var")
     for dir in "${essential_dirs[@]}"; do
@@ -215,7 +215,7 @@ verify_backup_integrity() {
             return 1
         fi
     done
-    
+
     return 0
 }
 
@@ -224,7 +224,7 @@ parse_arguments() {
     BACKUP_DIR=""
     SNAPSHOT_DIR=""
     SOURCE_DIR="/"  # Default to root filesystem
-    
+
     while [[ $# -gt 0 ]]; do
         case $1 in
             --dest)
@@ -270,7 +270,7 @@ parse_arguments() {
         log_msg "ERROR" "Missing required parameter: --dest"
         usage
     fi
-    
+
     if [ -z "$SNAPSHOT_DIR" ]; then
         log_msg "ERROR" "Missing required parameter: --snapshots"
         usage
@@ -313,55 +313,55 @@ trap 'rm -f "$TEMP_EXCLUDE_FILE" "$VALIDATED_EXCLUDE_FILE"' EXIT
 parse_exclude_config() {
     local config_file="${CONFIG_DIR}/system-backup-ignore"
     local temp_file="$1"
-    
+
     if [ ! -f "$config_file" ]; then
         log_msg "WARNING" "No system-backup-ignore config found at: $config_file"
         log_msg "INFO" "Creating empty exclude list - will backup everything"
         touch "$temp_file"
         return 0
     fi
-    
+
     log_msg "INFO" "Parsing exclude configuration: $config_file"
-    
+
     # Validate config file is readable
     if [ ! -r "$config_file" ]; then
         log_msg "ERROR" "Cannot read config file: $config_file"
         return 1
     fi
-    
+
     # Process config file and count patterns
     local total_lines=0
     local comment_lines=0
     local empty_lines=0
     local pattern_lines=0
     local negation_patterns=0
-    
+
     while IFS= read -r line || [ -n "$line" ]; do
         total_lines=$((total_lines + 1))
-        
+
         # Skip empty lines
         if [[ -z "${line// }" ]]; then
             empty_lines=$((empty_lines + 1))
             continue
         fi
-        
+
         # Skip comments
         if [[ "$line" =~ ^[[:space:]]*# ]]; then
             comment_lines=$((comment_lines + 1))
             continue
         fi
-        
+
         # Count negation patterns
         if [[ "$line" =~ ^[[:space:]]*! ]]; then
             negation_patterns=$((negation_patterns + 1))
         fi
-        
+
         # Add valid patterns to temp file
         echo "$line" >> "$temp_file"
         pattern_lines=$((pattern_lines + 1))
-        
+
     done < "$config_file"
-    
+
     # Display parsing statistics
     log_msg "INFO" "Config parsing complete:"
     log_msg "INFO" "  Total lines: $total_lines"
@@ -369,21 +369,21 @@ parse_exclude_config() {
     log_msg "INFO" "  Negation patterns: $negation_patterns"
     log_msg "INFO" "  Comments: $comment_lines"
     log_msg "INFO" "  Empty lines: $empty_lines"
-    
+
     # Show preview of active patterns (first 5)
     if [ "$pattern_lines" -gt 0 ]; then
         log_msg "INFO" "Preview of exclude patterns:"
         grep -v '^[[:space:]]*$' "$temp_file" | grep -v '^[[:space:]]*#' | head -5 | while read -r pattern; do
             log_msg "INFO" "  → $pattern"
         done
-        
+
         if [ "$pattern_lines" -gt 5 ]; then
             log_msg "INFO" "  ... and $((pattern_lines - 5)) more patterns"
         fi
     else
         log_msg "WARNING" "No active exclude patterns found - will backup everything"
     fi
-    
+
     return 0
 }
 

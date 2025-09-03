@@ -37,7 +37,7 @@ usage() {
     echo " • Uses data-backup-map.conf for multiple source-destination mappings"
     echo " • Each source can have custom ignore patterns and backup modes"
     echo " • Creates timestamped safety snapshots before backup"
-    echo " • Supports both full and incremental backup modes"
+    echo " • Supports incremental and mirror backup modes"
     echo " • Preserves file attributes and permissions"
     echo
     echo -e "${BOLD}Configuration:${NC}"
@@ -45,7 +45,7 @@ usage() {
     echo " • Source directories to backup"
     echo " • Destination subdirectories (under main backup path)"
     echo " • Ignore patterns for each source"
-    echo " • Backup modes (full or incremental)"
+    echo " • Backup modes (incremental or mirror)"
     echo
     echo -e "${BOLD}Examples:${NC}"
     echo " $0 --dest /mnt/backup --snapshots /mnt/snapshots"
@@ -76,7 +76,7 @@ parse_arguments() {
     BACKUP_DEST_PATH=""
     SNAPSHOT_PATH=""
     CONFIG_FILE="$BACKUP_MAP_FILE"
-    
+
     while [[ $# -gt 0 ]]; do
         case $1 in
             --dest)
@@ -122,12 +122,12 @@ parse_arguments() {
         log_msg "ERROR" "Missing required parameter: --dest"
         usage
     fi
-    
+
     if [ -z "$SNAPSHOT_PATH" ]; then
         log_msg "ERROR" "Missing required parameter: --snapshots"
         usage
     fi
-    
+
     # Update backup map file if custom config specified
     BACKUP_MAP_FILE="$CONFIG_FILE"
     if [ ! -f "$BACKUP_MAP_FILE" ]; then
@@ -169,18 +169,18 @@ map_based_backup_function() {
     local -a destinations=()
     local -a ignore_patterns=()
     local -a backup_modes=()
-    
-    if ! parse_data_backup_map "$BACKUP_MAP_FILE" sources destinations ignore_patterns backup_modes "false"; then
+
+    if ! parse_pipe_delimited_backup_map "$BACKUP_MAP_FILE" sources destinations ignore_patterns backup_modes "false"; then
         log_msg "ERROR" "Failed to parse backup map configuration"
         return 1
     fi
-    
+
     local total_entries=${#sources[@]}
     local successful_backups=0
     local failed_backups=0
-    
+
     log_msg "INFO" "Starting backup of $total_entries configured sources"
-    
+
     # Process each backup entry
     for ((i=0; i<total_entries; i++)); do
         local source_path="${sources[i]}"
@@ -188,26 +188,26 @@ map_based_backup_function() {
         local ignore_pattern="${ignore_patterns[i]}"
         local backup_mode="${backup_modes[i]}"
         local full_dest_path="$BACKUP_DEST_PATH/$dest_subdir"
-        
+
         log_msg "INFO" "Processing entry $((i+1))/$total_entries"
         log_msg "INFO" "Source: $source_path"
         log_msg "INFO" "Destination: $full_dest_path"
         log_msg "INFO" "Mode: $backup_mode"
-        
+
         # Check if source exists
         if [ ! -d "$source_path" ]; then
             log_msg "WARNING" "Source directory does not exist: $source_path, skipping"
             ((failed_backups++))
             continue
         fi
-        
+
         # Create destination directory if it doesn't exist
         if ! mkdir -p "$full_dest_path"; then
             log_msg "ERROR" "Failed to create destination directory: $full_dest_path"
             ((failed_backups++))
             continue
         fi
-        
+
         # Execute backup for this entry
         if backup_single_source "$source_path" "$full_dest_path" "$ignore_pattern" "$backup_mode"; then
             log_msg "SUCCESS" "Backup completed for: $source_path"
@@ -216,13 +216,13 @@ map_based_backup_function() {
             log_msg "ERROR" "Backup failed for: $source_path"
             ((failed_backups++))
         fi
-        
+
         echo # Add spacing between entries
     done
-    
+
     # Summary
     log_msg "INFO" "Backup summary: $successful_backups successful, $failed_backups failed"
-    
+
     if [ $failed_backups -eq 0 ]; then
         log_msg "SUCCESS" "All backup operations completed successfully"
         return 0
@@ -241,26 +241,27 @@ backup_single_source() {
     local dest_path="$2"
     local ignore_pattern="$3"
     local backup_mode="$4"
-    
-    local rsync_cmd="rsync -aAXHv --info=progress2 --bwlimit=10000"
+
+    # local rsync_cmd="rsync -aAXHv --info=progress2 --bwlimit=50000"
+    local rsync_cmd="rsync -aAXHv --info=progress2"
     local temp_exclude_file=""
-    
+
     # Process ignore patterns if provided
     if [ -n "$ignore_pattern" ]; then
         temp_exclude_file=$(mktemp)
         trap 'rm -f "$temp_exclude_file"' RETURN
-        
+
         # Convert comma-separated patterns to exclude file format
         echo "$ignore_pattern" | tr ',' '\n' | while IFS= read -r pattern; do
             [ -n "$pattern" ] && echo "$pattern" >> "$temp_exclude_file"
         done
-        
+
         if [ -s "$temp_exclude_file" ]; then
             rsync_cmd+=" --exclude-from=\"$temp_exclude_file\""
             log_msg "INFO" "Applied ignore patterns: $ignore_pattern"
         fi
     fi
-    
+
     # Handle different backup modes
     case "$backup_mode" in
         "incremental")
@@ -274,19 +275,19 @@ backup_single_source() {
             log_msg "INFO" "Using mirror mode (will delete files not in source)"
             log_msg "WARNING" "Mirror mode will remove files from destination not present in source"
             ;;
-        "full"|*)
-            log_msg "INFO" "Using full mode (copy all files, keep existing)"
+        *)
+            log_msg "WARNING" "Unknown backup mode '$backup_mode', using incremental"
             ;;
     esac
-    
+
     # Execute rsync
     log_msg "INFO" "Executing: rsync from '$source_path' to '$dest_path'"
     eval "$rsync_cmd '$source_path/' '$dest_path/'"
     local rsync_status=$?
-    
+
     # Clean up temp file
     [ -n "$temp_exclude_file" ] && rm -f "$temp_exclude_file"
-    
+
     return $rsync_status
 }
 
@@ -301,7 +302,7 @@ declare -a destinations=()
 declare -a ignore_patterns=()
 declare -a backup_modes=()
 
-if parse_data_backup_map "$BACKUP_MAP_FILE" sources destinations ignore_patterns backup_modes "false"; then
+if parse_pipe_delimited_backup_map "$BACKUP_MAP_FILE" sources destinations ignore_patterns backup_modes "false"; then
     log_msg "INFO" "Backup plan:"
     for ((i=0; i<${#sources[@]}; i++)); do
         local source_exists=""
@@ -320,8 +321,8 @@ if ! confirm_execution "map-based data backup" "n"; then
     exit 1
 fi
 
-# Perform backup with snapshots
-if execute_backup_with_snapshots "$BACKUP_DEST_PATH" "$SNAPSHOT_PATH" map_based_backup_function; then
+# Perform backup with single snapshot (post-backup only)
+if execute_system_backup_with_snapshot "$BACKUP_DEST_PATH" "$SNAPSHOT_PATH" map_based_backup_function; then
     show_backup_results "true" "$SNAPSHOT_PATH" "$TIMESTAMP"
     exit 0
 else
