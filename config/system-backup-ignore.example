@@ -87,6 +87,7 @@ lost+found/
 /home/*/.cache/mozilla/*
 
 # Development temporary files
+/home/*/.ollama/
 /home/*/.npm/_cacache/*
 /home/*/.npm/_cacache/.*
 /home/*/.cargo/registry/*

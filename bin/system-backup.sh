@@ -163,8 +163,7 @@ validate_exclude_patterns() {
 
 # Function to perform system backup
 system_backup_function() {
-    local rsync_cmd="rsync -aAXHv --info=progress2 --bwlimit=30000"
-    [ "$delete_flag" = "true" ] && rsync_cmd+=" --delete"
+    local rsync_cmd="rsync -aAXHv --info=progress2 --bwlimit=30000 --delete"
     [ -s "$VALIDATED_EXCLUDE_FILE" ] && rsync_cmd+=" --exclude-from='$VALIDATED_EXCLUDE_FILE'"
 
     # Execute rsync with progress visible and error capture
