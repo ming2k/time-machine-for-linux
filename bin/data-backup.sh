@@ -5,6 +5,11 @@ SCRIPT_PATH="$(readlink -f "$0")"
 PROJECT_ROOT="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
 LIB_DIR="${PROJECT_ROOT}/lib"
 CONFIG_DIR="${PROJECT_ROOT}/config"
+DEFAULT_BACKUP_MAP_FILE="${CONFIG_DIR}/data-backup-map.conf"
+BACKUP_MAP_FILE="$DEFAULT_BACKUP_MAP_FILE"
+CUSTOM_CONFIG_SPECIFIED=false
+CONFIG_FILE_PRESENT=true
+CONFIG_DIR_MISSING=false
 
 # Load libraries
 source "${PROJECT_ROOT}/lib/loader.sh"
@@ -13,12 +18,8 @@ if ! load_backup_libs "$LIB_DIR"; then
     exit 1
 fi
 
-# Check for data-backup-map config file
-BACKUP_MAP_FILE="${CONFIG_DIR}/data-backup-map.conf"
-if [ ! -f "$BACKUP_MAP_FILE" ]; then
-    log_msg "ERROR" "Data backup map config not found: $BACKUP_MAP_FILE"
-    log_msg "INFO" "Please create the configuration file with backup source-destination mappings"
-    exit 1
+if [ ! -d "$CONFIG_DIR" ]; then
+    CONFIG_DIR_MISSING=true
 fi
 
 # Function to display script usage
@@ -71,6 +72,16 @@ handle_interrupt() {
 # Set up interrupt handler
 trap 'handle_interrupt' SIGINT
 
+# Emit deferred configuration warnings near script exit
+emit_config_warnings() {
+    if [ "$CONFIG_DIR_MISSING" = "true" ]; then
+        log_msg "WARNING" "Config directory not found: $CONFIG_DIR"
+    fi
+    if [ "$CONFIG_FILE_PRESENT" != "true" ]; then
+        log_msg "WARNING" "Data backup map config not found: $BACKUP_MAP_FILE"
+    fi
+}
+
 # Parse command line arguments
 parse_arguments() {
     BACKUP_DEST_PATH=""
@@ -101,6 +112,7 @@ parse_arguments() {
                     usage
                 fi
                 CONFIG_FILE="$2"
+                CUSTOM_CONFIG_SPECIFIED=true
                 shift 2
                 ;;
             --help|-h)
@@ -131,8 +143,11 @@ parse_arguments() {
     # Update backup map file if custom config specified
     BACKUP_MAP_FILE="$CONFIG_FILE"
     if [ ! -f "$BACKUP_MAP_FILE" ]; then
-        log_msg "ERROR" "Config file not found: $BACKUP_MAP_FILE"
-        exit 1
+        if [ "$CUSTOM_CONFIG_SPECIFIED" = "true" ]; then
+            log_msg "ERROR" "Config file not found: $BACKUP_MAP_FILE"
+            exit 1
+        fi
+        CONFIG_FILE_PRESENT=false
     fi
 }
 
@@ -140,6 +155,13 @@ parse_arguments() {
 
 # Parse command line arguments first to handle --help
 parse_arguments "$@"
+
+if [ "$CONFIG_FILE_PRESENT" != "true" ]; then
+    print_banner "DATA BACKUP UTILITY" "$BLUE"
+    log_msg "INFO" "Skipping data backup because no configuration file was found"
+    emit_config_warnings
+    exit 0
+fi
 
 # Check if running as root
 if [ "$EUID" -ne 0 ]; then
@@ -324,8 +346,10 @@ fi
 # Perform backup with single snapshot (post-backup only)
 if execute_system_backup_with_snapshot "$BACKUP_DEST_PATH" "$SNAPSHOT_PATH" map_based_backup_function; then
     show_backup_results "true" "$SNAPSHOT_PATH" "$TIMESTAMP"
+    emit_config_warnings
     exit 0
 else
     show_backup_results "false" "$SNAPSHOT_PATH" "$TIMESTAMP"
+    emit_config_warnings
     exit 1
 fi
