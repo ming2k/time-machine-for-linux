@@ -69,13 +69,15 @@ check_free_space() {
 create_safety_snapshot() {
     local snapshot_path="$1"
     local snapshot_name="$2"
-    
+
     if ! is_btrfs_subvolume "$snapshot_path"; then
         log_msg "ERROR" "Snapshot path is not a BTRFS subvolume: $snapshot_path"
         return 1
     fi
-    
-    local full_path="${snapshot_path}/${snapshot_name}"
+
+    # Remove trailing slash from snapshot path to avoid double slashes
+    local clean_snapshot_path="${snapshot_path%/}"
+    local full_path="${clean_snapshot_path}/${snapshot_name}"
     
     if [ -e "$full_path" ]; then
         log_msg "ERROR" "Snapshot already exists: $full_path"

@@ -209,7 +209,9 @@ map_based_backup_function() {
         local dest_subdir="${destinations[i]}"
         local ignore_pattern="${ignore_patterns[i]}"
         local backup_mode="${backup_modes[i]}"
-        local full_dest_path="$BACKUP_DEST_PATH/$dest_subdir"
+        # Remove trailing slash from base path to avoid double slashes
+        local clean_dest_path="${BACKUP_DEST_PATH%/}"
+        local full_dest_path="$clean_dest_path/$dest_subdir"
 
         log_msg "INFO" "Processing entry $((i+1))/$total_entries"
         log_msg "INFO" "Source: $source_path"

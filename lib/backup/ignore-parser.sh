@@ -61,7 +61,9 @@ convert_gitignore_pattern_to_rsync() {
         # Absolute pattern (relative to repository root)
         pattern="${pattern#/}"
         if [[ -n "$base_path" ]]; then
-            rsync_pattern="$base_path/$pattern"
+            # Remove trailing slash from base path to avoid double slashes
+            local clean_base_path="${base_path%/}"
+            rsync_pattern="$clean_base_path/$pattern"
         else
             rsync_pattern="$pattern"
         fi
