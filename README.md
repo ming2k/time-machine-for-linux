@@ -113,7 +113,7 @@ sudo ./bin/data-backup.sh --dest /mnt/@data --snapshots /mnt/@snapshots --config
 
 #### Data Backup Config
 
-`config/data-backup-map.conf`
+`config/data-map.conf`
 ```bash
 # Map-based configuration with shell variables
 
@@ -164,7 +164,7 @@ BACKUP_ENTRY_4_MODE="mirror"  # Will delete files not in source
   - Multiple source directories mapped to subdirectories
   - Individual ignore patterns per source (gitignore syntax)
   - Choice of backup modes: full, incremental, or mirror
-  - Centralized configuration in `config/data-backup-map.conf`
+  - Centralized configuration in `config/data-map.conf`
 
 ## Why This Approach?
 

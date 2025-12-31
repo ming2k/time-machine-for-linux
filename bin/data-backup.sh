@@ -5,7 +5,7 @@ SCRIPT_PATH="$(readlink -f "$0")"
 PROJECT_ROOT="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
 LIB_DIR="${PROJECT_ROOT}/lib"
 CONFIG_DIR="${PROJECT_ROOT}/config"
-DEFAULT_BACKUP_MAP_FILE="${CONFIG_DIR}/data-backup-map.conf"
+DEFAULT_BACKUP_MAP_FILE="${CONFIG_DIR}/data-map.conf"
 BACKUP_MAP_FILE="$DEFAULT_BACKUP_MAP_FILE"
 CUSTOM_CONFIG_SPECIFIED=false
 CONFIG_FILE_PRESENT=true
@@ -32,10 +32,10 @@ usage() {
     echo
     echo -e "${BOLD}Options:${NC}"
     echo " --help, -h          : Show this help message"
-    echo " --config <file>     : Use custom config file (default: data-backup-map.conf)"
+    echo " --config <file>     : Use custom config file (default: data-map.conf)"
     echo
     echo -e "${BOLD}Features:${NC}"
-    echo " • Uses data-backup-map.conf for multiple source-destination mappings"
+    echo " • Uses data-map.conf for multiple source-destination mappings"
     echo " • Each source can have custom ignore patterns and backup modes"
     echo " • Creates timestamped safety snapshots before backup"
     echo " • Supports incremental and mirror backup modes"
