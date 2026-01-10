@@ -71,6 +71,19 @@ lost+found/
 /var/lib/containers/storage/overlay-images/*
 /var/lib/containers/storage/overlay-layers/*
 
+# Podman container configuration and data
+# NOTE: These should be backed up manually using 'podman save' and 'podman export'
+# Reason: Direct backup/restore may corrupt containers, wastes space, and lacks portability
+# See docs/PREFLIGHT_CHECKS.md for manual backup instructions
+/home/*/.config/containers/*
+/home/*/.config/containers/.*
+/root/.config/containers/*
+/root/.config/containers/.*
+/home/*/.local/share/containers/storage/*
+/home/*/.local/share/containers/storage/.*
+/root/.local/share/containers/storage/*
+/root/.local/share/containers/storage/.*
+
 # User cache and temporary directories
 /home/*/.cache/*
 /home/*/.local/share/Trash/*

@@ -408,8 +408,8 @@ fi
 # Display backup details
 display_backup_details "system" "$SOURCE_DIR" "$BACKUP_DIR" "$SNAPSHOT_DIR" "$VALIDATED_EXCLUDE_FILE"
 
-# Ask for confirmation before proceeding
-if confirm_execution "system backup" "n"; then
+# Ask for confirmation before proceeding (with preflight check option)
+if confirm_execution "system backup" "n" "system" "$BACKUP_DIR" "$SNAPSHOT_DIR"; then
     # Proceed with backup operations
     # Verify BTRFS requirements
     if ! is_btrfs_filesystem "$BACKUP_DIR" || ! is_btrfs_filesystem "$SNAPSHOT_DIR"; then

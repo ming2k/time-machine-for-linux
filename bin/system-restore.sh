@@ -203,7 +203,7 @@ main() {
     echo -e "${YELLOW}A pre-restore snapshot will be created for rollback capability.${NC}"
     echo
 
-    if ! confirm_execution "system restore" "n"; then
+    if ! confirm_execution "system restore" "n" "system" "$RESTORE_DEST" "${SNAPSHOT_PATH:-}"; then
         log_msg "INFO" "System restore cancelled by user"
         exit 0
     fi

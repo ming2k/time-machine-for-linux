@@ -35,6 +35,7 @@ load_backup_libs() {
         "backup/ignore-parser.sh"
         "backup/keep-list-parser.sh"
         "utils/validation.sh"
+        "utils/preflight-checks.sh"
         "utils/confirm-execution.sh"
         "utils/display-utils.sh"
         "utils/rsync-utils.sh"
@@ -91,6 +92,7 @@ load_restore_libs() {
         "config/parser.sh"
         "config/validator.sh"
         "utils/validation.sh"
+        "utils/preflight-checks.sh"
         "utils/confirm-execution.sh"
         "utils/display-utils.sh"
     )

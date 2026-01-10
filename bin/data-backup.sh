@@ -339,8 +339,8 @@ else
     exit 1
 fi
 
-# Ask for confirmation before proceeding
-if ! confirm_execution "map-based data backup" "n"; then
+# Ask for confirmation before proceeding (with preflight check option)
+if ! confirm_execution "map-based data backup" "n" "data" "$BACKUP_DEST_PATH" "$SNAPSHOT_PATH" "sources"; then
     log_msg "INFO" "Backup operation cancelled by user"
     exit 1
 fi
