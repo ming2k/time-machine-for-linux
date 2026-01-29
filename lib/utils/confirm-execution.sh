@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Confirm execution with optional preflight check capability
-# Usage: confirm_execution "operation_name" "default_response" ["backup_type" "dest_path" "snapshot_path" "sources_array_name"]
+# Usage: confirm_execution "operation_name" "default_response" ["backup_type" "dest_path" "snapshot_path" "sources_array_name" "destinations_array_name"]
 confirm_execution() {
     local operation_name="$1"
     local default_response="${2:-n}"  # Default to 'n' if not specified
@@ -9,6 +9,7 @@ confirm_execution() {
     local dest_path="$4"              # Optional: for preflight checks
     local snapshot_path="$5"          # Optional: for preflight checks
     local sources_array_name="$6"     # Optional: for preflight checks
+    local destinations_array_name="$7" # Optional: for orphan detection (data backups)
 
     # Convert default response to lowercase
     default_response=$(echo "$default_response" | tr '[:upper:]' '[:lower:]')
@@ -63,7 +64,7 @@ confirm_execution() {
             c|check)
                 if [ "$preflight_available" = true ]; then
                     # Run preflight checks and display info
-                    run_preflight_checks "$backup_type" "$dest_path" "$snapshot_path" "$sources_array_name"
+                    run_preflight_checks "$backup_type" "$dest_path" "$snapshot_path" "$sources_array_name" "$destinations_array_name"
                     show_preflight_info
                     echo ""  # Add spacing before returning to prompt
                     # Loop continues to ask again

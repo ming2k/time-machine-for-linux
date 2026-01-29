@@ -32,6 +32,7 @@ load_backup_libs() {
         "backup/backup-executor.sh"
         "backup/backup-protection.sh"
         "backup/backup-display.sh"
+        "backup/backup-state.sh"
         "backup/ignore-parser.sh"
         "backup/keep-list-parser.sh"
         "utils/validation.sh"

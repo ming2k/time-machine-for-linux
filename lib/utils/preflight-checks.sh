@@ -140,6 +140,51 @@ check_source_accessibility() {
     fi
 }
 
+# Check for orphaned backup destinations (data backups only)
+# Usage: check_orphaned_destinations dest_path destinations_array_name
+check_orphaned_destinations() {
+    local dest_path="$1"
+    local destinations_array_name="$2"
+
+    # Check if detect_orphans function exists (from backup-state.sh)
+    if ! declare -f detect_orphans &>/dev/null; then
+        return 0
+    fi
+
+    # Check if jq is available (required for state management)
+    if ! command -v jq &>/dev/null; then
+        return 0
+    fi
+
+    local -n _dests_ref=$destinations_array_name
+    local -a orphans=()
+
+    # Collect orphans
+    while IFS= read -r orphan; do
+        [[ -n "$orphan" ]] && orphans+=("$orphan")
+    done < <(detect_orphans "$dest_path" _dests_ref 2>/dev/null)
+
+    if [[ ${#orphans[@]} -eq 0 ]]; then
+        return 0
+    fi
+
+    # Build display message
+    local orphan_count=${#orphans[@]}
+    local display_orphans=""
+
+    if [[ $orphan_count -le 3 ]]; then
+        display_orphans=$(printf '%s, ' "${orphans[@]}")
+        display_orphans="${display_orphans%, }"
+    else
+        display_orphans="${orphans[0]}, ${orphans[1]}"
+        local remaining=$((orphan_count - 2))
+        display_orphans+=" (+${remaining} more)"
+    fi
+
+    add_preflight_notice "WARNING" "Found ${orphan_count} orphaned backup(s): ${display_orphans}"
+    add_preflight_notice "INFO" "Run with --list-orphans to see details or --cleanup-orphans to remove"
+}
+
 # Check for Podman containers and warn about manual backup needs
 check_podman_containers() {
     # Check if podman is installed
@@ -183,12 +228,13 @@ check_podman_containers() {
 }
 
 # Run all preflight checks
-# Usage: run_preflight_checks "backup_type" "dest_path" "snapshot_path" [sources_array_name]
+# Usage: run_preflight_checks "backup_type" "dest_path" "snapshot_path" [sources_array_name] [destinations_array_name]
 run_preflight_checks() {
     local backup_type="$1"      # "system" or "data"
     local dest_path="$2"
     local snapshot_path="$3"
-    local sources_array_name="$4"  # Optional: name of array variable containing sources
+    local sources_array_name="$4"       # Optional: name of array variable containing sources
+    local destinations_array_name="$5"  # Optional: name of array variable containing destinations
 
     # Reset notices array
     PREFLIGHT_NOTICES=()
@@ -204,6 +250,11 @@ run_preflight_checks() {
     # Check source accessibility for data backups
     if [ "$backup_type" = "data" ] && [ -n "$sources_array_name" ]; then
         check_source_accessibility "$sources_array_name"
+    fi
+
+    # Check for orphaned destinations (data backups only)
+    if [ "$backup_type" = "data" ] && [ -n "$destinations_array_name" ]; then
+        check_orphaned_destinations "$dest_path" "$destinations_array_name"
     fi
 }
 

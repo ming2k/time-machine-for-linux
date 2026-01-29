@@ -33,6 +33,8 @@ usage() {
     echo -e "${BOLD}Options:${NC}"
     echo " --help, -h          : Show this help message"
     echo " --config <file>     : Use custom config file (default: data-map.conf)"
+    echo " --list-orphans      : List orphaned backup destinations with sizes"
+    echo " --cleanup-orphans   : Interactive removal of orphaned destinations"
     echo
     echo -e "${BOLD}Features:${NC}"
     echo " • Uses data-map.conf for multiple source-destination mappings"
@@ -40,6 +42,8 @@ usage() {
     echo " • Creates timestamped safety snapshots before backup"
     echo " • Supports incremental and mirror backup modes"
     echo " • Preserves file attributes and permissions"
+    echo " • Supports .backupignore files in source directories"
+    echo " • Detects orphaned backup destinations when config changes"
     echo
     echo -e "${BOLD}Configuration:${NC}"
     echo " Edit ${BACKUP_MAP_FILE} to configure:"
@@ -51,6 +55,7 @@ usage() {
     echo -e "${BOLD}Examples:${NC}"
     echo " $0 --dest /mnt/backup --snapshots /mnt/snapshots"
     echo " $0 --dest /mnt/backup --snapshots /mnt/snapshots --config custom-map.conf"
+    echo " $0 --dest /mnt/backup --snapshots /mnt/snapshots --list-orphans"
     echo " $0 --help"
     exit 1
 }
@@ -87,6 +92,8 @@ parse_arguments() {
     BACKUP_DEST_PATH=""
     SNAPSHOT_PATH=""
     CONFIG_FILE="$BACKUP_MAP_FILE"
+    LIST_ORPHANS=false
+    CLEANUP_ORPHANS=false
 
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -114,6 +121,14 @@ parse_arguments() {
                 CONFIG_FILE="$2"
                 CUSTOM_CONFIG_SPECIFIED=true
                 shift 2
+                ;;
+            --list-orphans)
+                LIST_ORPHANS=true
+                shift
+                ;;
+            --cleanup-orphans)
+                CLEANUP_ORPHANS=true
+                shift
                 ;;
             --help|-h)
                 usage
@@ -270,18 +285,16 @@ backup_single_source() {
     local rsync_cmd="rsync -aAXHv --info=progress2"
     local temp_exclude_file=""
 
-    # Process ignore patterns if provided
-    if [ -n "$ignore_pattern" ]; then
-        temp_exclude_file=$(mktemp)
-        trap 'rm -f "$temp_exclude_file"' RETURN
+    # Process ignore patterns using the comprehensive exclude processor
+    # This supports .backupignore files, global ignore, and inline patterns
+    temp_exclude_file=$(mktemp)
+    trap 'rm -f "$temp_exclude_file"' RETURN
 
-        # Convert comma-separated patterns to exclude file format
-        echo "$ignore_pattern" | tr ',' '\n' | while IFS= read -r pattern; do
-            [ -n "$pattern" ] && echo "$pattern" >> "$temp_exclude_file"
-        done
+    process_backup_excludes "$source_path" "$ignore_pattern" "$temp_exclude_file"
 
-        if [ -s "$temp_exclude_file" ]; then
-            rsync_cmd+=" --exclude-from=\"$temp_exclude_file\""
+    if [ -s "$temp_exclude_file" ]; then
+        rsync_cmd+=" --exclude-from=\"$temp_exclude_file\""
+        if [ -n "$ignore_pattern" ]; then
             log_msg "INFO" "Applied ignore patterns: $ignore_pattern"
         fi
     fi
@@ -315,38 +328,55 @@ backup_single_source() {
     return $rsync_status
 }
 
-# Display backup details
-log_msg "INFO" "Main backup destination: $BACKUP_DEST_PATH"
-log_msg "INFO" "Snapshots path: $SNAPSHOT_PATH"
-log_msg "INFO" "Configuration file: $BACKUP_MAP_FILE"
-
-# Parse and display backup map summary
+# Parse backup map configuration first (needed for orphan handling)
 declare -a sources=()
 declare -a destinations=()
 declare -a ignore_patterns=()
 declare -a backup_modes=()
 
-if parse_pipe_delimited_backup_map "$BACKUP_MAP_FILE" sources destinations ignore_patterns backup_modes "false"; then
-    log_msg "INFO" "Backup plan:"
-    for ((i=0; i<${#sources[@]}; i++)); do
-        local source_exists=""
-        [ -d "${sources[i]}" ] && source_exists="✓" || source_exists="✗"
-        log_msg "INFO" "  [$((i+1))] $source_exists ${sources[i]} → ${destinations[i]}/ (${backup_modes[i]})"
-        [ -n "${ignore_patterns[i]}" ] && log_msg "INFO" "      Ignoring: ${ignore_patterns[i]}"
-    done
-else
+if ! parse_pipe_delimited_backup_map "$BACKUP_MAP_FILE" sources destinations ignore_patterns backup_modes "false"; then
     log_msg "ERROR" "Failed to parse backup configuration"
     exit 1
 fi
 
+# Handle --list-orphans flag
+if [ "$LIST_ORPHANS" = "true" ]; then
+    print_banner "DATA BACKUP UTILITY" "$BLUE"
+    list_orphans "$BACKUP_DEST_PATH" destinations
+    exit 0
+fi
+
+# Handle --cleanup-orphans flag
+if [ "$CLEANUP_ORPHANS" = "true" ]; then
+    print_banner "DATA BACKUP UTILITY" "$BLUE"
+    cleanup_orphans "$BACKUP_DEST_PATH" destinations
+    exit $?
+fi
+
+# Display backup details
+log_msg "INFO" "Main backup destination: $BACKUP_DEST_PATH"
+log_msg "INFO" "Snapshots path: $SNAPSHOT_PATH"
+log_msg "INFO" "Configuration file: $BACKUP_MAP_FILE"
+
+# Display backup plan summary
+log_msg "INFO" "Backup plan:"
+for ((i=0; i<${#sources[@]}; i++)); do
+    local source_exists=""
+    [ -d "${sources[i]}" ] && source_exists="✓" || source_exists="✗"
+    log_msg "INFO" "  [$((i+1))] $source_exists ${sources[i]} → ${destinations[i]}/ (${backup_modes[i]})"
+    [ -n "${ignore_patterns[i]}" ] && log_msg "INFO" "      Ignoring: ${ignore_patterns[i]}"
+done
+
 # Ask for confirmation before proceeding (with preflight check option)
-if ! confirm_execution "map-based data backup" "n" "data" "$BACKUP_DEST_PATH" "$SNAPSHOT_PATH" "sources"; then
+if ! confirm_execution "map-based data backup" "n" "data" "$BACKUP_DEST_PATH" "$SNAPSHOT_PATH" "sources" "destinations"; then
     log_msg "INFO" "Backup operation cancelled by user"
     exit 1
 fi
 
 # Perform backup with single snapshot (post-backup only)
 if execute_system_backup_with_snapshot "$BACKUP_DEST_PATH" "$SNAPSHOT_PATH" map_based_backup_function; then
+    # Update backup state file for orphan detection
+    update_backup_state "$BACKUP_DEST_PATH" sources destinations
     show_backup_results "true" "$SNAPSHOT_PATH" "$TIMESTAMP"
     emit_config_warnings
     exit 0
