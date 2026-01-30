@@ -63,13 +63,14 @@ show_backup_results() {
     local result_timestamp="$3"
 
     echo ""
+    local clean_result_snapshot_dir="${result_snapshot_dir%/}"
     if [ "$result_success" = "true" ]; then
         log_msg "SUCCESS" "Backup completed"
-        [ -n "$result_timestamp" ] && echo -e "   Snapshot: ${result_snapshot_dir}/${result_timestamp}"
+        [ -n "$result_timestamp" ] && echo -e "   Snapshot: ${clean_result_snapshot_dir}/${result_timestamp}"
         return 0
     else
         log_msg "ERROR" "Backup failed"
-        [ -n "$result_timestamp" ] && echo -e "   Snapshot: ${result_snapshot_dir}/${result_timestamp}"
+        [ -n "$result_timestamp" ] && echo -e "   Snapshot: ${clean_result_snapshot_dir}/${result_timestamp}"
         return 1
     fi
 }
