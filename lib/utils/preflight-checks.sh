@@ -24,77 +24,58 @@ add_preflight_notice() {
 # Check available disk space and warn if low
 check_disk_space() {
     local dest_path="$1"
-    local threshold_percent="${2:-20}"  # Default: warn if < 20% free
+    local threshold_percent="${2:-20}"
 
-    if [ ! -d "$dest_path" ]; then
-        return 0
-    fi
+    # Skip if path is empty or doesn't exist
+    [[ -z "$dest_path" || ! -d "$dest_path" ]] && return 0
 
     # Get disk usage percentage
-    local usage_percent=$(df "$dest_path" | awk 'NR==2 {print $5}' | sed 's/%//')
-    local available_percent=$((100 - usage_percent))
-    local available_space=$(df -h "$dest_path" | awk 'NR==2 {print $4}')
+    local usage_percent=$(df "$dest_path" 2>/dev/null | awk 'NR==2 {print $5}' | sed 's/%//')
 
-    if [ "$available_percent" -lt "$threshold_percent" ]; then
-        if [ "$available_percent" -lt 10 ]; then
-            add_preflight_notice "CRITICAL" "Only ${available_percent}% disk space remaining (${available_space} free)"
-        else
-            add_preflight_notice "WARNING" "Disk space: ${available_percent}% free (${available_space} available)"
-        fi
-    else
-        add_preflight_notice "INFO" "Disk space: ${available_percent}% free (${available_space} available)"
+    # Skip if we couldn't get usage
+    [[ -z "$usage_percent" ]] && return 0
+
+    local available_percent=$((100 - usage_percent))
+    local available_space=$(df -h "$dest_path" 2>/dev/null | awk 'NR==2 {print $4}')
+
+    if [ "$available_percent" -lt 10 ]; then
+        add_preflight_notice "CRITICAL" "Only ${available_percent}% disk space remaining (${available_space} free)"
+    elif [ "$available_percent" -lt "$threshold_percent" ]; then
+        add_preflight_notice "WARNING" "Disk space: ${available_percent}% free (${available_space} available)"
     fi
 }
 
 # Check for old snapshots that should be cleaned up
 check_snapshot_count() {
     local snapshot_path="$1"
-    local max_snapshots="${2:-10}"  # Default: warn if > 10 snapshots
+    local max_snapshots="${2:-10}"
 
-    if [ ! -d "$snapshot_path" ]; then
-        add_preflight_notice "INFO" "Snapshot directory will be created on first backup"
-        return 0
-    fi
+    [[ -z "$snapshot_path" || ! -d "$snapshot_path" ]] && return 0
 
-    # Count snapshots (directories starting with backup- or restore-)
-    local snapshot_count=$(find "$snapshot_path" -maxdepth 1 -type d \( -name "backup-*" -o -name "restore-*" \) 2>/dev/null | wc -l)
+    # Count snapshots
+    local snapshot_count=$(find "$snapshot_path" -maxdepth 1 -type d \( -name "*-backup-*" -o -name "backup-*" \) 2>/dev/null | wc -l)
 
-    if [ "$snapshot_count" -eq 0 ]; then
-        add_preflight_notice "INFO" "No previous snapshots found"
-    elif [ "$snapshot_count" -gt "$max_snapshots" ]; then
-        add_preflight_notice "WARNING" "Found ${snapshot_count} snapshots (consider cleanup to save space)"
-    else
-        add_preflight_notice "INFO" "Found ${snapshot_count} existing snapshot(s)"
+    if [ "$snapshot_count" -gt "$max_snapshots" ]; then
+        add_preflight_notice "WARNING" "${snapshot_count} snapshots found (consider cleanup)"
     fi
 }
 
 # Check last backup time and warn if backup is overdue
 check_last_backup_time() {
     local backup_path="$1"
-    local max_days="${2:-7}"  # Default: warn if > 7 days since last backup
+    local max_days="${2:-7}"
 
-    if [ ! -d "$backup_path" ]; then
-        add_preflight_notice "INFO" "First backup to this destination"
-        return 0
-    fi
+    [[ -z "$backup_path" || ! -d "$backup_path" ]] && return 0
 
     # Find the most recently modified file in backup
     local last_modified=$(find "$backup_path" -type f -printf '%T@\n' 2>/dev/null | sort -n | tail -1)
-
-    if [ -z "$last_modified" ]; then
-        add_preflight_notice "INFO" "No previous backup data found"
-        return 0
-    fi
+    [[ -z "$last_modified" ]] && return 0
 
     local current_time=$(date +%s)
     local days_since_backup=$(( (current_time - ${last_modified%.*}) / 86400 ))
 
     if [ "$days_since_backup" -gt "$max_days" ]; then
-        add_preflight_notice "WARNING" "Last backup: ${days_since_backup} days ago (overdue)"
-    elif [ "$days_since_backup" -eq 0 ]; then
-        add_preflight_notice "INFO" "Last backup: today"
-    else
-        add_preflight_notice "INFO" "Last backup: ${days_since_backup} day(s) ago"
+        add_preflight_notice "WARNING" "Last backup: ${days_since_backup} days ago"
     fi
 }
 
@@ -102,41 +83,30 @@ check_last_backup_time() {
 check_btrfs_health() {
     local btrfs_path="$1"
 
-    if ! is_btrfs_filesystem "$btrfs_path"; then
-        return 0
-    fi
+    [[ -z "$btrfs_path" ]] && return 0
 
     # Check for BTRFS errors in kernel log (last 100 lines)
-    if dmesg 2>/dev/null | tail -100 | grep -i "btrfs.*error\|btrfs.*warning" >/dev/null 2>&1; then
-        add_preflight_notice "CRITICAL" "BTRFS warnings detected in system logs (run 'dmesg | grep -i btrfs')"
-    else
-        add_preflight_notice "INFO" "BTRFS filesystem health: OK"
+    if dmesg 2>/dev/null | tail -100 | grep -qi "btrfs.*error"; then
+        add_preflight_notice "CRITICAL" "BTRFS errors in system logs (run 'dmesg | grep -i btrfs')"
     fi
 }
 
 # Check if source directories exist and are readable
 check_source_accessibility() {
-    local -n sources_array=$1  # Array reference
+    local -n sources_array=$1
 
     local total_sources=${#sources_array[@]}
     local accessible_count=0
-    local inaccessible_sources=()
 
     for source in "${sources_array[@]}"; do
-        if [ -d "$source" ] && [ -r "$source" ]; then
-            accessible_count=$((accessible_count + 1))
-        else
-            inaccessible_sources+=("$source")
-        fi
+        [[ -d "$source" && -r "$source" ]] && ((accessible_count++))
     done
 
-    if [ "$accessible_count" -eq "$total_sources" ]; then
-        add_preflight_notice "INFO" "All ${total_sources} source(s) accessible"
-    elif [ "$accessible_count" -eq 0 ]; then
+    if [ "$accessible_count" -eq 0 ]; then
         add_preflight_notice "CRITICAL" "No sources are accessible"
-    else
-        local inaccessible_count=$((total_sources - accessible_count))
-        add_preflight_notice "WARNING" "${accessible_count}/${total_sources} sources accessible (${inaccessible_count} will be skipped)"
+    elif [ "$accessible_count" -lt "$total_sources" ]; then
+        local skip=$((total_sources - accessible_count))
+        add_preflight_notice "WARNING" "${skip} source(s) not accessible (will be skipped)"
     fi
 }
 
@@ -181,50 +151,7 @@ check_orphaned_destinations() {
         display_orphans+=" (+${remaining} more)"
     fi
 
-    add_preflight_notice "WARNING" "Found ${orphan_count} orphaned backup(s): ${display_orphans}"
-    add_preflight_notice "INFO" "Run with --list-orphans to see details or --cleanup-orphans to remove"
-}
-
-# Check for Podman containers and warn about manual backup needs
-check_podman_containers() {
-    # Check if podman is installed
-    if ! command -v podman >/dev/null 2>&1; then
-        return 0
-    fi
-
-    local found_podman_data=false
-    local podman_dirs=()
-
-    # Check for Podman data in common locations
-    # 1. Current user (if not root)
-    if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
-        local user_home=$(getent passwd "$SUDO_USER" | cut -d: -f6)
-        if [ -d "$user_home/.config/containers" ] || [ -d "$user_home/.local/share/containers" ]; then
-            found_podman_data=true
-            podman_dirs+=("$user_home/.config/containers" "$user_home/.local/share/containers")
-        fi
-    fi
-
-    # 2. Root user
-    if [ -d "/root/.config/containers" ] || [ -d "/root/.local/share/containers" ]; then
-        found_podman_data=true
-        podman_dirs+=("/root/.config/containers" "/root/.local/share/containers")
-    fi
-
-    # 3. Check all home directories for any users running Podman
-    while IFS=: read -r username _ _ _ _ homedir _; do
-        if [ -d "$homedir/.config/containers" ] || [ -d "$homedir/.local/share/containers" ]; then
-            if [[ ! " ${podman_dirs[@]} " =~ " ${homedir}/.config/containers " ]]; then
-                found_podman_data=true
-                podman_dirs+=("$homedir/.config/containers" "$homedir/.local/share/containers")
-            fi
-        fi
-    done < /etc/passwd
-
-    if [ "$found_podman_data" = true ]; then
-        add_preflight_notice "WARNING" "Podman containers detected: ~/.config/containers/ should be backed up manually"
-        add_preflight_notice "INFO" "Reason: Restoring Podman data may corrupt containers. Manual backup saves space and allows selective restore"
-    fi
+    add_preflight_notice "CRITICAL" "${orphan_count} orphaned backup(s): ${display_orphans}"
 }
 
 # Run all preflight checks
@@ -245,7 +172,6 @@ run_preflight_checks() {
     check_snapshot_count "$snapshot_path"
     check_last_backup_time "$dest_path"
     check_btrfs_health "$dest_path"
-    check_podman_containers
 
     # Check source accessibility for data backups
     if [ "$backup_type" = "data" ] && [ -n "$sources_array_name" ]; then
@@ -258,56 +184,33 @@ run_preflight_checks() {
     fi
 }
 
-# Display preflight notices
+# Display preflight notices (only warnings and critical)
 show_preflight_info() {
     local notice_count=${#PREFLIGHT_NOTICES[@]}
 
-    # Display header
-    echo -e "\n${BOLD}${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BOLD}${CYAN}  Good to know before you proceed${NC}"
-    echo -e "${BOLD}${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
-
     if [ "$notice_count" -eq 0 ]; then
-        echo -e "${GREEN}✓${NC} No issues detected\n"
         return 0
     fi
 
-    # Track severity counts
-    local info_count=0
-    local warning_count=0
-    local critical_count=0
+    local has_output=false
 
-    # Display each notice with appropriate color
+    # Display each notice with searchable prefixes
     for i in "${!PREFLIGHT_NOTICES[@]}"; do
         local severity="${PREFLIGHT_SEVERITIES[$i]}"
         local message="${PREFLIGHT_NOTICES[$i]}"
 
         case "$severity" in
-            "INFO")
-                echo -e "  ${BLUE}ℹ${NC}  ${message}"
-                info_count=$((info_count + 1))
-                ;;
             "WARNING")
-                echo -e "  ${YELLOW}⚠${NC}  ${message}"
-                warning_count=$((warning_count + 1))
+                echo -e "${YELLOW}[WARN]${NC}  ${message}"
+                has_output=true
                 ;;
             "CRITICAL")
-                echo -e "  ${RED}✖${NC}  ${message}"
-                critical_count=$((critical_count + 1))
+                echo -e "${RED}[ERROR]${NC} ${message}"
+                has_output=true
                 ;;
         esac
     done
 
-    # Display summary
-    echo ""
-    if [ "$critical_count" -gt 0 ]; then
-        echo -e "${BOLD}${RED}Found ${critical_count} critical issue(s). Proceeding is not recommended.${NC}\n"
-        return 1
-    elif [ "$warning_count" -gt 0 ]; then
-        echo -e "${BOLD}${YELLOW}Found ${warning_count} warning(s). Review before proceeding.${NC}\n"
-    else
-        echo -e "${BOLD}${GREEN}All checks passed.${NC}\n"
-    fi
-
+    [ "$has_output" = true ] && echo ""
     return 0
 }

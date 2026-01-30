@@ -286,81 +286,91 @@ parse_pipe_delimited_backup_map() {
     local -n excludes_ref="$4"
     local -n backup_modes_ref="$5"
     local validate_paths="${6:-true}"
-    
+
     if [ ! -f "$config_file" ]; then
         log_msg "ERROR" "Config file not found: $config_file"
         return 1
     fi
-    
+
     if [ ! -s "$config_file" ]; then
         log_msg "ERROR" "Config file is empty: $config_file"
         return 1
     fi
-    
-    log_msg "INFO" "Parsing pipe-delimited backup map: $config_file"
-    
+
     local line_num=0
     local valid_entries=0
-    
+
     while IFS= read -r line; do
         ((line_num++))
-        
+
         # Skip empty lines and comments
-        if [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]]; then
-            continue
-        fi
-        
+        [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+
         # Split line into components (source|dest|ignore_patterns|mode)
         IFS='|' read -r src_path dst_path ignore_pattern backup_mode <<< "$line"
-        
+
         # Trim whitespace
         src_path=$(echo "$src_path" | xargs)
         dst_path=$(echo "$dst_path" | xargs)
         ignore_pattern=$(echo "$ignore_pattern" | xargs)
         backup_mode=$(echo "$backup_mode" | xargs)
-        
+
         # Set defaults
         [[ -z "$backup_mode" ]] && backup_mode="incremental"
-        
-        # Validate source path
-        if [ -z "$src_path" ]; then
-            log_msg "WARNING" "Line $line_num: Missing source path, skipping"
-            continue
-        fi
-        
-        # Validate destination path
-        if [ -z "$dst_path" ]; then
-            log_msg "WARNING" "Line $line_num: Missing destination path, skipping"
-            continue
-        fi
-        
+
+        # Validate required fields
+        [[ -z "$src_path" ]] && continue
+        [[ -z "$dst_path" ]] && continue
+
         # Check if source exists (if requested)
         if [ "$validate_paths" = "true" ] && [ ! -d "$src_path" ]; then
-            log_msg "WARNING" "Line $line_num: Source directory does not exist: $src_path"
+            log_msg "WARNING" "Source not found: $src_path"
             continue
         fi
-        
+
         # Validate backup mode
         if [[ "$backup_mode" != "incremental" && "$backup_mode" != "mirror" ]]; then
-            log_msg "WARNING" "Line $line_num: Invalid backup mode '$backup_mode', using 'incremental'"
             backup_mode="incremental"
         fi
-        
+
         # Add to arrays
         sources_ref+=("$src_path")
         destinations_ref+=("$dst_path")
         excludes_ref+=("$ignore_pattern")
         backup_modes_ref+=("$backup_mode")
-        
         ((valid_entries++))
-        log_msg "INFO" "Entry: $src_path -> $dst_path (mode: $backup_mode)"
     done < "$config_file"
-    
+
     if [ $valid_entries -eq 0 ]; then
         log_msg "ERROR" "No valid backup entries found"
         return 1
     fi
-    
-    log_msg "INFO" "Successfully parsed $valid_entries backup entries"
+
+    return 0
+}
+
+# Parse system backup exclude configuration
+# Usage: parse_system_exclude_config "config_file" "output_file"
+parse_system_exclude_config() {
+    local config_file="$1"
+    local output_file="$2"
+
+    if [ ! -f "$config_file" ]; then
+        touch "$output_file"
+        return 0
+    fi
+
+    if [ ! -r "$config_file" ]; then
+        log_msg "ERROR" "Cannot read config file: $config_file"
+        return 1
+    fi
+
+    # Extract patterns (skip empty lines and comments)
+    while IFS= read -r line || [ -n "$line" ]; do
+        [[ -z "${line// }" ]] && continue
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+        echo "$line" >> "$output_file"
+    done < "$config_file"
+
     return 0
 } 

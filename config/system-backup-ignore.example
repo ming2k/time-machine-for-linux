@@ -74,7 +74,7 @@ lost+found/
 # Podman container configuration and data
 # NOTE: These should be backed up manually using 'podman save' and 'podman export'
 # Reason: Direct backup/restore may corrupt containers, wastes space, and lacks portability
-# See docs/PREFLIGHT_CHECKS.md for manual backup instructions
+# See docs/preflight-checks.md for manual backup instructions
 /home/*/.config/containers/*
 /home/*/.config/containers/.*
 /root/.config/containers/*

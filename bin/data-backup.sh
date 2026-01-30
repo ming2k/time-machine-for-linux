@@ -89,8 +89,8 @@ emit_config_warnings() {
 
 # Parse command line arguments
 parse_arguments() {
-    BACKUP_DEST_PATH=""
-    SNAPSHOT_PATH=""
+    BACKUP_DIR=""
+    SNAPSHOT_DIR=""
     CONFIG_FILE="$BACKUP_MAP_FILE"
     LIST_ORPHANS=false
     CLEANUP_ORPHANS=false
@@ -102,7 +102,7 @@ parse_arguments() {
                     log_msg "ERROR" "--dest requires a path argument"
                     usage
                 fi
-                BACKUP_DEST_PATH="$2"
+                BACKUP_DIR="$2"
                 shift 2
                 ;;
             --snapshots)
@@ -110,7 +110,7 @@ parse_arguments() {
                     log_msg "ERROR" "--snapshots requires a path argument"
                     usage
                 fi
-                SNAPSHOT_PATH="$2"
+                SNAPSHOT_DIR="$2"
                 shift 2
                 ;;
             --config)
@@ -145,12 +145,12 @@ parse_arguments() {
     done
 
     # Validate required parameters
-    if [ -z "$BACKUP_DEST_PATH" ]; then
+    if [ -z "$BACKUP_DIR" ]; then
         log_msg "ERROR" "Missing required parameter: --dest"
         usage
     fi
 
-    if [ -z "$SNAPSHOT_PATH" ]; then
+    if [ -z "$SNAPSHOT_DIR" ]; then
         log_msg "ERROR" "Missing required parameter: --snapshots"
         usage
     fi
@@ -172,8 +172,8 @@ parse_arguments() {
 parse_arguments "$@"
 
 if [ "$CONFIG_FILE_PRESENT" != "true" ]; then
-    print_banner "DATA BACKUP UTILITY" "$BLUE"
-    log_msg "INFO" "Skipping data backup because no configuration file was found"
+    print_banner "Data Backup"
+    echo "No configuration file found, skipping"
     emit_config_warnings
     exit 0
 fi
@@ -185,13 +185,11 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # Verify that the snapshot path is a BTRFS subvolume
-if ! is_btrfs_subvolume "$SNAPSHOT_PATH"; then
-    log_msg "ERROR" "Snapshot path '$SNAPSHOT_PATH' is not a BTRFS subvolume"
+if ! is_btrfs_subvolume "$SNAPSHOT_DIR"; then
+    log_msg "ERROR" "Snapshot path '$SNAPSHOT_DIR' is not a BTRFS subvolume"
     exit 1
 fi
 
-# Print header
-print_banner "DATA BACKUP UTILITY" "$BLUE"
 
 # Initialize variables for temporary files
 TEMP_EXCLUDE_FILE=""
@@ -199,24 +197,11 @@ TEMP_EXCLUDE_FILE=""
 # Flag to track if backup was interrupted
 BACKUP_INTERRUPTED=false
 
-# Map-based backup function
+# Map-based backup function (uses global arrays: sources, destinations, ignore_patterns, backup_modes)
 map_based_backup_function() {
-    # Parse the backup map configuration
-    local -a sources=()
-    local -a destinations=()
-    local -a ignore_patterns=()
-    local -a backup_modes=()
-
-    if ! parse_pipe_delimited_backup_map "$BACKUP_MAP_FILE" sources destinations ignore_patterns backup_modes "false"; then
-        log_msg "ERROR" "Failed to parse backup map configuration"
-        return 1
-    fi
-
     local total_entries=${#sources[@]}
     local successful_backups=0
     local failed_backups=0
-
-    log_msg "INFO" "Starting backup of $total_entries configured sources"
 
     # Process each backup entry
     for ((i=0; i<total_entries; i++)); do
@@ -225,13 +210,10 @@ map_based_backup_function() {
         local ignore_pattern="${ignore_patterns[i]}"
         local backup_mode="${backup_modes[i]}"
         # Remove trailing slash from base path to avoid double slashes
-        local clean_dest_path="${BACKUP_DEST_PATH%/}"
+        local clean_dest_path="${BACKUP_DIR%/}"
         local full_dest_path="$clean_dest_path/$dest_subdir"
 
-        log_msg "INFO" "Processing entry $((i+1))/$total_entries"
-        log_msg "INFO" "Source: $source_path"
-        log_msg "INFO" "Destination: $full_dest_path"
-        log_msg "INFO" "Mode: $backup_mode"
+        echo -e "[$((i+1))/$total_entries] ${BOLD}$source_path${NC} → $dest_subdir ($backup_mode)"
 
         # Check if source exists
         if [ ! -d "$source_path" ]; then
@@ -260,16 +242,15 @@ map_based_backup_function() {
     done
 
     # Summary
-    log_msg "INFO" "Backup summary: $successful_backups successful, $failed_backups failed"
-
+    echo ""
     if [ $failed_backups -eq 0 ]; then
-        log_msg "SUCCESS" "All backup operations completed successfully"
+        log_msg "SUCCESS" "All $successful_backups backups completed"
         return 0
     elif [ $successful_backups -gt 0 ]; then
-        log_msg "WARNING" "Some backup operations failed"
+        log_msg "WARNING" "$successful_backups succeeded, $failed_backups failed"
         return 1
     else
-        log_msg "ERROR" "All backup operations failed"
+        log_msg "ERROR" "All $failed_backups backups failed"
         return 1
     fi
 }
@@ -281,49 +262,30 @@ backup_single_source() {
     local ignore_pattern="$3"
     local backup_mode="$4"
 
-    # local rsync_cmd="rsync -aAXHv --info=progress2 --bwlimit=50000"
-    local rsync_cmd="rsync -aAXHv --info=progress2"
+    # Build rsync command as array (safer than eval)
+    local -a rsync_cmd=(rsync -aAXHv --info=progress2)
     local temp_exclude_file=""
 
-    # Process ignore patterns using the comprehensive exclude processor
-    # This supports .backupignore files, global ignore, and inline patterns
+    # Process ignore patterns
     temp_exclude_file=$(mktemp)
-    trap 'rm -f "$temp_exclude_file"' RETURN
 
     process_backup_excludes "$source_path" "$ignore_pattern" "$temp_exclude_file"
 
     if [ -s "$temp_exclude_file" ]; then
-        rsync_cmd+=" --exclude-from=\"$temp_exclude_file\""
-        if [ -n "$ignore_pattern" ]; then
-            log_msg "INFO" "Applied ignore patterns: $ignore_pattern"
-        fi
+        rsync_cmd+=(--exclude-from="$temp_exclude_file")
     fi
 
     # Handle different backup modes
-    case "$backup_mode" in
-        "incremental")
-            # For incremental, we could add timestamp-based logic here
-            # For now, we'll use rsync's built-in incremental capabilities
-            log_msg "INFO" "Using incremental mode (rsync will only copy changed files)"
-            ;;
-        "mirror")
-            # Mirror mode creates an exact copy and removes files not in source
-            rsync_cmd+=" --delete --delete-excluded"
-            log_msg "INFO" "Using mirror mode (will delete files not in source)"
-            log_msg "WARNING" "Mirror mode will remove files from destination not present in source"
-            ;;
-        *)
-            log_msg "WARNING" "Unknown backup mode '$backup_mode', using incremental"
-            ;;
-    esac
+    if [ "$backup_mode" = "mirror" ]; then
+        rsync_cmd+=(--delete --delete-excluded)
+    fi
 
     # Execute rsync
-    log_msg "INFO" "Executing: rsync from '$source_path' to '$dest_path'"
-    eval "$rsync_cmd '$source_path/' '$dest_path/'"
+    "${rsync_cmd[@]}" "$source_path/" "$dest_path/"
     local rsync_status=$?
 
     # Clean up temp file
-    [ -n "$temp_exclude_file" ] && rm -f "$temp_exclude_file"
+    rm -f "$temp_exclude_file"
 
     return $rsync_status
 }
@@ -341,47 +303,49 @@ fi
 
 # Handle --list-orphans flag
 if [ "$LIST_ORPHANS" = "true" ]; then
-    print_banner "DATA BACKUP UTILITY" "$BLUE"
-    list_orphans "$BACKUP_DEST_PATH" destinations
+    print_banner "Data Backup"
+    list_orphans "$BACKUP_DIR" destinations
     exit 0
 fi
 
 # Handle --cleanup-orphans flag
 if [ "$CLEANUP_ORPHANS" = "true" ]; then
-    print_banner "DATA BACKUP UTILITY" "$BLUE"
-    cleanup_orphans "$BACKUP_DEST_PATH" destinations
+    print_banner "Data Backup"
+    cleanup_orphans "$BACKUP_DIR" destinations
     exit $?
 fi
 
+# Check for orphaned backup destinations and exit if any found
+if detect_orphans "$BACKUP_DIR" destinations >/dev/null 2>&1; then
+    print_banner "Data Backup"
+    log_msg "WARNING" "Orphaned backup destinations detected"
+    list_orphans "$BACKUP_DIR" destinations
+    log_msg "ERROR" "Run --cleanup-orphans to remove or update config"
+    exit 1
+fi
+
 # Display backup details
-log_msg "INFO" "Main backup destination: $BACKUP_DEST_PATH"
-log_msg "INFO" "Snapshots path: $SNAPSHOT_PATH"
-log_msg "INFO" "Configuration file: $BACKUP_MAP_FILE"
+print_banner "Data Backup"
+echo -e "Destination:  ${BOLD}$BACKUP_DIR${NC}"
+echo -e "Snapshots:    ${BOLD}$SNAPSHOT_DIR${NC}"
+echo -e "Sources:      ${BOLD}${#sources[@]}${NC}"
+echo ""
 
-# Display backup plan summary
-log_msg "INFO" "Backup plan:"
-for ((i=0; i<${#sources[@]}; i++)); do
-    local source_exists=""
-    [ -d "${sources[i]}" ] && source_exists="✓" || source_exists="✗"
-    log_msg "INFO" "  [$((i+1))] $source_exists ${sources[i]} → ${destinations[i]}/ (${backup_modes[i]})"
-    [ -n "${ignore_patterns[i]}" ] && log_msg "INFO" "      Ignoring: ${ignore_patterns[i]}"
-done
-
-# Ask for confirmation before proceeding (with preflight check option)
-if ! confirm_execution "map-based data backup" "n" "data" "$BACKUP_DEST_PATH" "$SNAPSHOT_PATH" "sources" "destinations"; then
-    log_msg "INFO" "Backup operation cancelled by user"
+# Ask for confirmation
+if ! confirm_execution "data backup" "n" "data" "$BACKUP_DIR" "$SNAPSHOT_DIR" "sources" "destinations"; then
+    echo "Cancelled"
     exit 1
 fi
 
 # Perform backup with single snapshot (post-backup only)
-if execute_system_backup_with_snapshot "$BACKUP_DEST_PATH" "$SNAPSHOT_PATH" map_based_backup_function; then
+if execute_system_backup_with_snapshot "$BACKUP_DIR" "$SNAPSHOT_DIR" map_based_backup_function; then
     # Update backup state file for orphan detection
-    update_backup_state "$BACKUP_DEST_PATH" sources destinations
-    show_backup_results "true" "$SNAPSHOT_PATH" "$TIMESTAMP"
+    update_backup_state "$BACKUP_DIR" sources destinations
+    show_backup_results "true" "$SNAPSHOT_DIR" "$TIMESTAMP"
     emit_config_warnings
     exit 0
 else
-    show_backup_results "false" "$SNAPSHOT_PATH" "$TIMESTAMP"
+    show_backup_results "false" "$SNAPSHOT_DIR" "$TIMESTAMP"
     emit_config_warnings
     exit 1
 fi

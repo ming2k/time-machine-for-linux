@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Confirm execution with optional preflight check capability
+# Confirm execution with automatic preflight checks
 # Usage: confirm_execution "operation_name" "default_response" ["backup_type" "dest_path" "snapshot_path" "sources_array_name" "destinations_array_name"]
 confirm_execution() {
     local operation_name="$1"
@@ -14,36 +14,35 @@ confirm_execution() {
     # Convert default response to lowercase
     default_response=$(echo "$default_response" | tr '[:upper:]' '[:lower:]')
 
-    # Determine if preflight checks are available
-    local preflight_available=false
+    # Run preflight checks and auto-show if there are warnings/critical issues
     if [ -n "$backup_type" ] && [ -n "$dest_path" ] && [ -n "$snapshot_path" ]; then
-        preflight_available=true
+        run_preflight_checks "$backup_type" "$dest_path" "$snapshot_path" "$sources_array_name" "$destinations_array_name"
+
+        # Check if there are any WARNING or CRITICAL notices
+        local has_issues=false
+        for severity in "${PREFLIGHT_SEVERITIES[@]}"; do
+            if [ "$severity" = "WARNING" ] || [ "$severity" = "CRITICAL" ]; then
+                has_issues=true
+                break
+            fi
+        done
+
+        # Auto-show preflight info if there are issues
+        if [ "$has_issues" = true ]; then
+            show_preflight_info
+        fi
     fi
 
-    # Set prompt based on whether preflight is available
+    # Set prompt
     local prompt
-    if [ "$preflight_available" = true ]; then
-        if [ "$default_response" = "y" ]; then
-            prompt="[Y/n/c]"
-        else
-            prompt="[y/N/c]"
-        fi
+    if [ "$default_response" = "y" ]; then
+        prompt="[Y/n]"
     else
-        if [ "$default_response" = "y" ]; then
-            prompt="[Y/n]"
-        else
-            prompt="[y/N]"
-        fi
+        prompt="[y/N]"
     fi
 
     while true; do
-        # Build the question
-        local question="Do you want to proceed with ${operation_name}? ${prompt}"
-        if [ "$preflight_available" = true ]; then
-            question="${question} (c=check preflight info)"
-        fi
-
-        read -p "$question " response
+        read -p "Proceed with ${operation_name}? ${prompt} " response
 
         # If empty response, use default
         if [ -z "$response" ]; then
@@ -61,27 +60,9 @@ confirm_execution() {
                 echo "Operation cancelled by user."
                 return 1
                 ;;
-            c|check)
-                if [ "$preflight_available" = true ]; then
-                    # Run preflight checks and display info
-                    run_preflight_checks "$backup_type" "$dest_path" "$snapshot_path" "$sources_array_name" "$destinations_array_name"
-                    show_preflight_info
-                    echo ""  # Add spacing before returning to prompt
-                    # Loop continues to ask again
-                else
-                    echo "Preflight checks not available for this operation."
-                fi
-                ;;
             *)
-                if [ "$preflight_available" = true ]; then
-                    echo "Please answer yes, no, or check."
-                else
-                    echo "Please answer yes or no."
-                fi
+                echo "Please answer yes or no."
                 ;;
         esac
     done
 }
-
-# Export the function so it's available to sourced scripts
-export -f confirm_execution

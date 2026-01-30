@@ -48,29 +48,25 @@ log_msg() {
     local level="$1"
     local message="$2"
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    
-    # Color codes
-    local RED='\033[0;31m'
-    local GREEN='\033[0;32m'
-    local YELLOW='\033[1;33m'
-    local BLUE='\033[0;34m'
-    local NC='\033[0m' # No Color
-    
-    # Set color based on level
-    local color
-    case "$level" in
-        "ERROR") color="$RED" ;;
-        "SUCCESS") color="$GREEN" ;;
-        "WARNING") color="$YELLOW" ;;
-        "INFO") color="$BLUE" ;;
-        *) color="$NC" ;;
-    esac
-    
-    # Log to file
+
+    # Log to file (always with full format)
     echo "[$timestamp] [$level] $message" >> "$LOG_FILE"
-    
-    # Log to console with colors
-    echo -e "${color}[$level]${NC} $message"
+
+    # Log to console - only prefix errors/warnings (searchable)
+    case "$level" in
+        "ERROR")
+            echo -e "${RED}[ERROR]${NC} $message"
+            ;;
+        "WARNING")
+            echo -e "${YELLOW}[WARN]${NC}  $message"
+            ;;
+        "SUCCESS")
+            echo -e "${GREEN}$message${NC}"
+            ;;
+        "INFO"|*)
+            echo -e "$message"
+            ;;
+    esac
 }
 
 # Log command execution

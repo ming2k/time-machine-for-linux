@@ -11,8 +11,26 @@ A safe, simple, less dependency and opinionated backup solution for Linux system
 
 ## Prerequisites
 - A storage medium with a storage capacity larger than the data to be backed up
-- Linux with `rsync` and `btrfs`(from btrfs-progs) commands
 - Root privileges for system operations
+- Required packages:
+  - `rsync` - file synchronization
+  - `btrfs-progs` - BTRFS filesystem tools (provides `btrfs` and `mkfs.btrfs`)
+  - `jq` - JSON processor (for data backup state tracking)
+  - `cryptsetup` - LUKS encryption (optional, for encrypted backup storage)
+
+```bash
+# Debian/Ubuntu
+sudo apt install rsync btrfs-progs jq cryptsetup
+
+# Fedora
+sudo dnf install rsync btrfs-progs jq cryptsetup
+
+# Arch Linux
+sudo pacman -S rsync btrfs-progs jq cryptsetup
+
+# Void Linux
+sudo xbps-install -S rsync btrfs-progs jq cryptsetup
+```
 
 ## Backup Storage Medium Setup
 > [!IMPORTANT]
@@ -109,41 +127,83 @@ sudo ./bin/system-backup.sh --source / --dest /mnt/point/@ --snapshots /mnt/poin
 sudo ./bin/data-backup.sh --dest /mnt/@data --snapshots /mnt/@snapshots
 # Using custom configuration file
 sudo ./bin/data-backup.sh --dest /mnt/@data --snapshots /mnt/@snapshots --config custom-map.conf
+# List orphaned backup destinations (from removed config entries)
+sudo ./bin/data-backup.sh --dest /mnt/@data --snapshots /mnt/@snapshots --list-orphans
+# Interactively remove orphaned destinations
+sudo ./bin/data-backup.sh --dest /mnt/@data --snapshots /mnt/@snapshots --cleanup-orphans
 ```
 
 #### Data Backup Config
 
-`config/data-map.conf`
+`config/data-map.conf` uses pipe-delimited format: `source|dest|ignore_patterns|mode`
+
 ```bash
-# Map-based configuration with shell variables
+# Format: source|dest|ignore_patterns|mode
+#
+# source: Full path to source directory
+# dest: Subdirectory name under backup destination
+# ignore_patterns: Comma-separated gitignore-style patterns (optional)
+# mode: incremental (default) or mirror
 
-# User home directory (excluding downloads and caches)
-BACKUP_ENTRY_1_SOURCE="/home/user"
-BACKUP_ENTRY_1_DEST="home_user"
-BACKUP_ENTRY_1_IGNORE="Downloads/,downloads/,.cache/,*.tmp,*.log"
-BACKUP_ENTRY_1_MODE="incremental"
+# Documents folder (exact mirror)
+/home/user/documents|documents||mirror
 
-# Important documents folder
-BACKUP_ENTRY_2_SOURCE="/home/user/Documents"
-BACKUP_ENTRY_2_DEST="documents"
-BACKUP_ENTRY_2_MODE="full"
+# Projects with exclusions for build artifacts
+/home/user/projects|projects|node_modules/,dist/,build/,__pycache__/,.venv/|mirror
 
-# Media collection
-BACKUP_ENTRY_3_SOURCE="/home/user/Media"
-BACKUP_ENTRY_3_DEST="media"
-BACKUP_ENTRY_3_IGNORE="*.tmp,*.partial"
-BACKUP_ENTRY_3_MODE="incremental"
+# Media collection (exclude temporary files)
+/home/user/media|media|*.tmp,*.partial|incremental
 
 # Website directory (exact mirror)
-BACKUP_ENTRY_4_SOURCE="/var/www"
-BACKUP_ENTRY_4_DEST="website"
-BACKUP_ENTRY_4_MODE="mirror"  # Will delete files not in source
+/var/www|website||mirror
 ```
 
 **Backup Modes:**
-- **full**: Copy all files, keep existing files in destination
-- **incremental**: Only copy changed files (uses rsync's change detection)
+- **incremental**: Only copy changed files, keep extra files in destination (default)
 - **mirror**: Create exact mirror, removes files not present in source
+
+#### .backupignore Files
+
+Data backup supports `.backupignore` files in source directories using gitignore syntax:
+
+```bash
+# /home/user/projects/.backupignore
+node_modules/
+*.log
+.env
+__pycache__/
+```
+
+Ignore patterns are merged from multiple sources (in order of precedence):
+1. `.backupignore` file in the source directory
+2. Global ignore file at `config/backup/.backupignore`
+3. Inline patterns from `data-map.conf`
+
+#### Orphan Detection
+
+Detects leftover backup directories when you remove entries from your config file. For safety, the backup script will refuse to proceed if orphans are found until they are resolved.
+
+**Example scenario:**
+1. Config has: `documents`, `photos`, `media` → backup creates these 3 directories
+2. You remove `photos` from config (no longer need to back it up)
+3. The `photos/` directory still exists in backup destination, wasting space
+4. Orphan detection stops the backup and prompts for resolution
+
+```bash
+# Preflight error during backup:
+# ⚠ Orphaned backup destinations detected.
+# Orphaned backup destinations found:
+#   • photos/     (15.2 GB)
+# ✖ Backup cannot proceed while orphans exist.
+
+# List orphans with sizes
+sudo ./bin/data-backup.sh --dest /mnt/@data --snapshots /mnt/@snapshots --list-orphans
+
+# Interactive cleanup
+sudo ./bin/data-backup.sh --dest /mnt/@data --snapshots /mnt/@snapshots --cleanup-orphans
+```
+
+For more scenarios (renaming, source changes, etc.), see [docs/data-backup-scenarios.md](docs/data-backup-scenarios.md).
 
 
 ## Backup Principles
@@ -163,7 +223,9 @@ BACKUP_ENTRY_4_MODE="mirror"  # Will delete files not in source
 - **Strategy**: Organized backup with:
   - Multiple source directories mapped to subdirectories
   - Individual ignore patterns per source (gitignore syntax)
-  - Choice of backup modes: full, incremental, or mirror
+  - `.backupignore` files in source directories
+  - Choice of backup modes: incremental or mirror
+  - Orphan detection when config entries are removed
   - Centralized configuration in `config/data-map.conf`
 
 ## Why This Approach?
@@ -177,8 +239,10 @@ BACKUP_ENTRY_4_MODE="mirror"  # Will delete files not in source
 **Data Backup (Map-Based)**:
 - Handles multiple sources with individual control
 - Each source can have different ignore patterns and backup modes
+- Supports `.backupignore` files in source directories
 - Organized into subdirectories for easy management
-- Supports full, incremental, and mirror backup modes
+- Supports incremental and mirror backup modes
+- Detects orphaned backups when config changes
 - Flexible configuration for various backup scenarios
 
 **Result**: You get a complete system that can be fully restored (without media clutter) + flexible data backup with multiple sources, each configured according to your specific needs.
