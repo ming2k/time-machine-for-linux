@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-01-30
+
+### Added
+- Orphan detection for data backups - detects leftover directories when config entries are removed
+- `--list-orphans` flag to view orphaned backup destinations with sizes
+- `--cleanup-orphans` flag for interactive removal of orphaned directories
+- Backup state tracking via `.backup-state.json` file
+- New `docs/data-backup-scenarios.md` documentation for backup workflows
+- `.backupignore` file support in source directories
+- Package prerequisites section in README (rsync, btrfs-progs, jq, cryptsetup)
+
+### Changed
+- Data backup config format changed to pipe-delimited: `source|dest|ignore_patterns|mode`
+- Orphan preflight notice elevated from WARNING to CRITICAL level
+- Backup now blocks execution when orphans are detected (must resolve first)
+- Renamed `docs/PREFLIGHT_CHECKS.md` to `docs/preflight-checks.md` for consistency
+
+### Fixed
+- Made test helper files executable
+
 ## [1.0.0] - 2024-04-15
 
 ### Added
