@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-02-23
+
+### Added
+- `bin/home-backup.sh` — dedicated home directory backup (`/home`)
+- `bin/home-restore.sh` — dedicated home directory restore
+- `config/home-backup-ignore` — exclusion patterns for home backup (caches, dev tool data)
+- New BTRFS subvolume structure: `@system`, `@home`, `@data`, `@archive`, `@snapshots`
+
+### Changed
+- System backup now excludes `/home/` entirely (single `/home/` rule replaces ~80 per-user patterns)
+- Subvolume naming: `@` → `@system`, `@data` → `@archive`, new `@data` for live disk extension
+- `format-btrfs-luks.sh` creates the full five-subvolume structure automatically
+
+### Removed
+- `bin/data-backup.sh` and `bin/data-restore.sh` — data backup is now managed manually
+- `config/data-map.conf` and related pipe-delimited config format
+- `lib/backup/backup-state.sh`, `backup-excludes.sh`, `ignore-parser.sh`, `keep-list-parser.sh`
+- Orphan detection, `.backupignore` file support, and multi-source map system
+
 ## [2.0.0] - 2026-01-30
 
 ### Added
