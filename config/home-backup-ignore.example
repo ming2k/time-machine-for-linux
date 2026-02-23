@@ -1,0 +1,33 @@
+# Home Backup Ignore Configuration
+# This file contains gitignore-style patterns for files and directories
+# to exclude from home backups. Patterns support wildcards and negation.
+
+# Caches and volatile data
+.cache/
+.thumbnails/
+.gvfs/
+.local/share/Trash/
+
+# Container storage
+# NOTE: Back up containers manually using 'podman save' / 'podman export'
+.local/share/containers/storage/
+.config/containers/
+
+# Dev tool caches
+.ollama/
+.claude/
+.npm/_cacache/
+.cargo/registry/
+.gradle/caches/
+.m2/repository/
+.local/share/JetBrains/
+.vscode/extensions/
+
+# Flatpak caches
+.var/app/*/cache/
+
+# Large data directories (manage separately with rsync or a dedicated tool)
+# ...
+
+# Negation examples (uncomment to include specific items)
+# !documents/important/

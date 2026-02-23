@@ -54,9 +54,11 @@ We do not recommend using configurations outside of this convention - they might
 #### BTRFS Subvolumes
 ```bash
 # Create subvolumes
-sudo btrfs subvolume create /mnt/@root
-sudo btrfs subvolume create /mnt/@data
-sudo btrfs subvolume create /mnt/@snapshots
+sudo btrfs subvolume create /mnt/@system    # OS backup
+sudo btrfs subvolume create /mnt/@home      # Home backup
+sudo btrfs subvolume create /mnt/@data      # Live data extension (mounted directly)
+sudo btrfs subvolume create /mnt/@archive   # Cold archive backup
+sudo btrfs subvolume create /mnt/@snapshots # Safety snapshots
 ```
 
 #### LUKS Setup
@@ -88,18 +90,16 @@ sudo ./tools/mountctl.sh -u /mnt/point
 
 #### TL;DR
 ```bash
-# Basic system backup (complete system excluding media files)
-sudo ./bin/system-backup.sh --source / --dest /mnt/point/@ --snapshots /mnt/point/@snapshots
+# Back up / (excluding /home, which is backed up separately)
+sudo ./bin/system-backup.sh --source / --dest /mnt/point/@system --snapshots /mnt/point/@snapshots
 ```
 #### System Backup Config
 
 `config/system-backup-ignore`
 
 ```bash
-# Exclude media files (put them in data backup instead)
-/home/*/Music/
-/home/*/Videos/
-/home/*/Downloads/
+# Home directory (backed up separately by home-backup.sh)
+/home/
 
 # Exclude virtual filesystems
 /proc/*
@@ -113,139 +113,134 @@ sudo ./bin/system-backup.sh --source / --dest /mnt/point/@ --snapshots /mnt/poin
 
 **System Backup Features:**
 - **Blacklist approach**: Backs up everything except excluded patterns
+- **Excludes /home entirely**: Home is a dedicated tier backed up by `home-backup.sh`
 - **BTRFS snapshots**: Creates pre-backup snapshots for safety
 - **Efficient transfers**: Uses rsync with progress reporting
-- **Smart exclusions**: Automatically excludes virtual filesystems, temp files, and media
 - **User confirmation**: Shows preview before execution
 
-### Data Backup
+### Home Backup
 
 #### TL;DR
-
 ```bash
-# Backup multiple sources with individual configurations
-sudo ./bin/data-backup.sh --dest /mnt/@data --snapshots /mnt/@snapshots
-# Using custom configuration file
-sudo ./bin/data-backup.sh --dest /mnt/@data --snapshots /mnt/@snapshots --config custom-map.conf
-# List orphaned backup destinations (from removed config entries)
-sudo ./bin/data-backup.sh --dest /mnt/@data --snapshots /mnt/@snapshots --list-orphans
-# Interactively remove orphaned destinations
-sudo ./bin/data-backup.sh --dest /mnt/@data --snapshots /mnt/@snapshots --cleanup-orphans
+# Back up /home (dotfiles, config, app state — excluding large data dirs)
+sudo ./bin/home-backup.sh --dest /mnt/point/@home --snapshots /mnt/point/@snapshots
 ```
 
-#### Data Backup Config
+#### Home Backup Config
 
-`config/data-map.conf` uses pipe-delimited format: `source|dest|ignore_patterns|mode`
-
-```bash
-# Format: source|dest|ignore_patterns|mode
-#
-# source: Full path to source directory
-# dest: Subdirectory name under backup destination
-# ignore_patterns: Comma-separated gitignore-style patterns (optional)
-# mode: incremental (default) or mirror
-
-# Documents folder (exact mirror)
-/home/user/documents|documents||mirror
-
-# Projects with exclusions for build artifacts
-/home/user/projects|projects|node_modules/,dist/,build/,__pycache__/,.venv/|mirror
-
-# Media collection (exclude temporary files)
-/home/user/media|media|*.tmp,*.partial|incremental
-
-# Website directory (exact mirror)
-/var/www|website||mirror
-```
-
-**Backup Modes:**
-- **incremental**: Only copy changed files, keep extra files in destination (default)
-- **mirror**: Create exact mirror, removes files not present in source
-
-#### .backupignore Files
-
-Data backup supports `.backupignore` files in source directories using gitignore syntax:
+`config/home-backup-ignore`
 
 ```bash
-# /home/user/projects/.backupignore
-node_modules/
-*.log
-.env
-__pycache__/
+# Caches and volatile data
+.cache/
+.thumbnails/
+
+# Large data directories (manage separately with rsync or a dedicated tool)
+downloads/
+documents/
+pictures/
+music/
+videos/
+projects/
 ```
 
-Ignore patterns are merged from multiple sources (in order of precedence):
-1. `.backupignore` file in the source directory
-2. Global ignore file at `config/backup/.backupignore`
-3. Inline patterns from `data-map.conf`
+**Home Backup Features:**
+- **Dotfiles and config**: Captures shell configs, app settings, and user state
+- **Excludes large data**: Directories like `~/projects`, `~/downloads` go into archive backup
+- **Independent restore**: Restore just `/home` without touching the system — clean for distro switches
+- **BTRFS snapshots**: Pre-backup snapshots for safety
+- **User confirmation**: Shows preview before execution
 
-#### Orphan Detection
+## How to Restore
 
-Detects leftover backup directories when you remove entries from your config file. For safety, the backup script will refuse to proceed if orphans are found until they are resolved.
+> [!IMPORTANT]
+> Restoring overwrites existing files at the destination. Always use `--dry-run` first to preview changes.
 
-**Example scenario:**
-1. Config has: `documents`, `photos`, `media` → backup creates these 3 directories
-2. You remove `photos` from config (no longer need to back it up)
-3. The `photos/` directory still exists in backup destination, wasting space
-4. Orphan detection stops the backup and prompts for resolution
+### System Restore
 
+#### TL;DR
 ```bash
-# Preflight error during backup:
-# ⚠ Orphaned backup destinations detected.
-# Orphaned backup destinations found:
-#   • photos/     (15.2 GB)
-# ✖ Backup cannot proceed while orphans exist.
+# Preview what would be restored (safe, no changes made)
+sudo ./bin/system-restore.sh --source /mnt/point/@system --dest / --dry-run
 
-# List orphans with sizes
-sudo ./bin/data-backup.sh --dest /mnt/@data --snapshots /mnt/@snapshots --list-orphans
+# Restore system with a pre-restore safety snapshot
+sudo ./bin/system-restore.sh --source /mnt/point/@system --dest / --snapshots /mnt/point/@snapshots
 
-# Interactive cleanup
-sudo ./bin/data-backup.sh --dest /mnt/@data --snapshots /mnt/@snapshots --cleanup-orphans
+# Restore without creating a snapshot
+sudo ./bin/system-restore.sh --source /mnt/point/@system --dest / --no-snapshot
 ```
 
-For more scenarios (renaming, source changes, etc.), see [docs/data-backup-scenarios.md](docs/data-backup-scenarios.md).
+**System Restore Features:**
+- **Metadata preservation**: Restores permissions, ownership, timestamps, ACLs, extended attributes, hard links, and symlinks
+- **Safety snapshot**: Creates a pre-restore BTRFS snapshot of the destination before making changes
+- **Dry-run mode**: Preview all changes without modifying any files
+- **Source validation**: Verifies the backup contains critical system directories (`bin`, `etc`, `lib`, `usr`) and files (`etc/passwd`, `etc/fstab`) before proceeding
+- **Disk space check**: Confirms sufficient space at the destination before restore
 
+### Home Restore
+
+#### TL;DR
+```bash
+# Preview what would be restored (safe, no changes made)
+sudo ./bin/home-restore.sh --source /mnt/point/@home --dest /home --dry-run
+
+# Restore home with a pre-restore safety snapshot
+sudo ./bin/home-restore.sh --source /mnt/point/@home --dest /home --snapshots /mnt/point/@snapshots
+
+# Restore without creating a snapshot
+sudo ./bin/home-restore.sh --source /mnt/point/@home --dest /home --no-snapshot
+```
+
+**Home Restore Features:**
+- **Metadata preservation**: Restores permissions, ownership, timestamps, ACLs, extended attributes, hard links, and symlinks
+- **Safety snapshot**: Creates a pre-restore BTRFS snapshot of the destination before making changes
+- **Dry-run mode**: Preview all changes without modifying any files
+- **Independent from system**: Restore just `/home` after a distro switch without touching `/`
+- **Disk space check**: Confirms sufficient space at the destination before restore
 
 ## Backup Principles
 
-### System Backup (Blacklist - Exclude What You Don't Need)
-- **Goal**: Complete system preservation for full recovery
-- **Method**: Backup everything EXCEPT excluded items
-- **Strategy**: Keep it slim by excluding:
-  - Large Data files (AI Models, Music, Videos and so on)
-  - Temporary files and caches
-  - Virtual filesystems (/proc, /sys, /dev)
-  - Files that cause redundant (/home/*/{Downloads,downloads}, /mnt, /snapshots if it exists )
+Three backup tiers + one live storage subvolume, all independent:
 
-### Data Backup (Map-Based - Multiple Sources with Custom Rules)
-- **Goal**: Flexible backup of multiple directories with individual control
-- **Method**: Source-destination mapping with per-source ignore patterns and backup modes
-- **Strategy**: Organized backup with:
-  - Multiple source directories mapped to subdirectories
-  - Individual ignore patterns per source (gitignore syntax)
-  - `.backupignore` files in source directories
-  - Choice of backup modes: incremental or mirror
-  - Orphan detection when config entries are removed
-  - Centralized configuration in `config/data-map.conf`
+| Subvolume | Role | Script |
+|-----------|------|--------|
+| `@system` | OS backup | `system-backup.sh` → `/` excluding `/home` |
+| `@home` | Home backup | `home-backup.sh` → `/home` dotfiles and config |
+| `@data` | Live disk extension | Mounted directly — no backup script |
+| `@archive` | Cold storage | Manual `rsync` or dedicated tool — no backup script |
+
+### System (`@system`)
+- **Goal**: OS and application state for full system recovery
+- **Method**: Backup everything under `/` EXCEPT excluded items
+- **Excludes**: `/home/` entirely, virtual filesystems, caches, temp files
+
+### Home (`@home`)
+- **Goal**: User environment — dotfiles, shell config, app settings
+- **Method**: Backup `/home` with cache and large-data exclusions
+- **Excludes**: `.cache/`, dev tool caches, and large data dirs you manage separately
+- **Key benefit**: Restore just home after a distro switch without touching `/`
+
+### Data (`@data`) — Live Storage Extension
+- **Goal**: Extend internal disk capacity with the external drive
+- **Method**: Mount directly and use as regular storage (no backup script involved)
+- **Use for**: Active projects, VMs, large working files — anything your internal disk can't fit
+- **Mount example**: `sudo mount -o subvol=@data /dev/mapper/encrypted_root /mnt/data`
+
+### Archive (`@archive`) — Cold Storage
+- **Goal**: Long-term storage of infrequently accessed data
+- **Method**: Managed manually — use `rsync`, `restic`, or `borgbackup` as needed
+- **Use for**: Completed projects, media libraries, documents you rarely need
 
 ## Why This Approach?
 
-**System Backup (Blacklist)**:
-- Ensures complete system recovery capability
-- Excludes media to keep backup size manageable
-- Preserves all applications and system state
-- Quick system restoration when needed
+**Two focused backup scripts, two plain storage subvolumes:**
 
-**Data Backup (Map-Based)**:
-- Handles multiple sources with individual control
-- Each source can have different ignore patterns and backup modes
-- Supports `.backupignore` files in source directories
-- Organized into subdirectories for easy management
-- Supports incremental and mirror backup modes
-- Detects orphaned backups when config changes
-- Flexible configuration for various backup scenarios
+- **Distro switch** → restore `@home` to new install, `@system` stays untouched
+- **System crash** → restore `@system` without overwriting your home
+- **Disk full** → use `@data` as transparent overflow storage, always available
+- **Cold storage** → `rsync` to `@archive` manually when you need it
 
-**Result**: You get a complete system that can be fully restored (without media clutter) + flexible data backup with multiple sources, each configured according to your specific needs.
+**Result**: Each subvolume has one clear job. Backups stay simple, restores stay safe.
 
 ## License
 

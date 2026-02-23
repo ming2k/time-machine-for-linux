@@ -1,22 +1,20 @@
 #!/bin/bash
 
 # Confirm execution with automatic preflight checks
-# Usage: confirm_execution "operation_name" "default_response" ["backup_type" "dest_path" "snapshot_path" "sources_array_name" "destinations_array_name"]
+# Usage: confirm_execution "operation_name" "default_response" ["backup_type" "dest_path" "snapshot_path"]
 confirm_execution() {
     local operation_name="$1"
     local default_response="${2:-n}"  # Default to 'n' if not specified
     local backup_type="$3"            # Optional: for preflight checks
     local dest_path="$4"              # Optional: for preflight checks
     local snapshot_path="$5"          # Optional: for preflight checks
-    local sources_array_name="$6"     # Optional: for preflight checks
-    local destinations_array_name="$7" # Optional: for orphan detection (data backups)
 
     # Convert default response to lowercase
     default_response=$(echo "$default_response" | tr '[:upper:]' '[:lower:]')
 
     # Run preflight checks and auto-show if there are warnings/critical issues
     if [ -n "$backup_type" ] && [ -n "$dest_path" ] && [ -n "$snapshot_path" ]; then
-        run_preflight_checks "$backup_type" "$dest_path" "$snapshot_path" "$sources_array_name" "$destinations_array_name"
+        run_preflight_checks "$backup_type" "$dest_path" "$snapshot_path"
 
         # Check if there are any WARNING or CRITICAL notices
         local has_issues=false

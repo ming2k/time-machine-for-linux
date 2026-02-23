@@ -66,9 +66,11 @@ TEMP_MOUNT=$(mktemp -d)
 mount "$LUKS_DEVICE" "$TEMP_MOUNT"
 
 echo "Creating Btrfs subvolumes..."
-btrfs subvolume create "$TEMP_MOUNT/@"
-btrfs subvolume create "$TEMP_MOUNT/@snapshots"
+btrfs subvolume create "$TEMP_MOUNT/@system"
+btrfs subvolume create "$TEMP_MOUNT/@home"
 btrfs subvolume create "$TEMP_MOUNT/@data"
+btrfs subvolume create "$TEMP_MOUNT/@archive"
+btrfs subvolume create "$TEMP_MOUNT/@snapshots"
 
 # echo "Setting default subvolume to @..."
 # btrfs subvolume set-default "$TEMP_MOUNT/@"

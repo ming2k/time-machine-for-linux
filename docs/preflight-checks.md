@@ -12,11 +12,10 @@ When you run a backup operation, preflight checks run automatically:
 System Backup
 ─────────────────────────────────
 Source:       /
-Destination:  /mnt/@
+Destination:  /mnt/@system
 Snapshots:    /mnt/@snapshots
-Excludes:     102 patterns
+Excludes:     25 patterns
 
-[WARN]  Mirror mode: files not in source will be deleted
 [WARN]  38 snapshots found (consider cleanup)
 [WARN]  Last backup: 14 days ago
 
@@ -29,9 +28,9 @@ If no issues are detected, you only see the confirmation prompt:
 System Backup
 ─────────────────────────────────
 Source:       /
-Destination:  /mnt/@
+Destination:  /mnt/@system
 Snapshots:    /mnt/@snapshots
-Excludes:     102 patterns
+Excludes:     25 patterns
 
 Proceed with system backup? [y/N]
 ```
@@ -50,13 +49,6 @@ Proceed with system backup? [y/N]
 
 ### BTRFS Health
 - **Error**: BTRFS errors detected in system logs
-
-### Source Accessibility (Data Backup only)
-- **Warning**: Some sources not accessible (will be skipped)
-- **Error**: No sources accessible
-
-### Orphaned Destinations (Data Backup only)
-- **Error**: Orphaned backup destinations detected
 
 ## Severity Levels
 

@@ -5,35 +5,6 @@ source "${LIB_DIR}/backup/backup-protection.sh"
 source "${LIB_DIR}/fs/btrfs.sh"  # Added for BTRFS validation
 
 
-# Execute backup with snapshot protection
-execute_backup_with_snapshots() {
-    local backup_dest_dir="$1"
-    local backup_snapshot_dir="$2"
-    local backup_function="$3"
-
-    # Create safety snapshot before backup
-    local backup_timestamp=""
-    if [ -n "$backup_snapshot_dir" ]; then
-        backup_timestamp=$(create_safety_snapshots "$backup_dest_dir" "$backup_snapshot_dir")
-        if [ $? -ne 0 ] || [ -z "$backup_timestamp" ]; then
-            log_msg "WARNING" "Failed to create safety snapshot"
-            backup_snapshot_dir=""
-        fi
-    fi
-
-    # Execute the backup function
-    if ! $backup_function; then
-        return 1
-    fi
-
-    # Create post-backup snapshot
-    if [ -n "$backup_snapshot_dir" ] && [ -n "$backup_timestamp" ]; then
-        create_safety_snapshots "$backup_dest_dir" "$backup_snapshot_dir" >/dev/null
-    fi
-
-    return 0
-}
-
 # Execute system backup with single snapshot (post-backup only)
 execute_system_backup_with_snapshot() {
     local backup_dest_dir="$1"
@@ -98,8 +69,8 @@ create_safety_snapshots() {
     # Create snapshot name
     local snapshot_name
     case "$snapshot_dest_name" in
-        "@") snapshot_name="system-backup-${snapshot_timestamp}" ;;
-        "@data") snapshot_name="data-backup-${snapshot_timestamp}" ;;
+        "@system") snapshot_name="system-backup-${snapshot_timestamp}" ;;
+        "@home")   snapshot_name="home-backup-${snapshot_timestamp}" ;;
         *) snapshot_name="${snapshot_dest_name}-backup-${snapshot_timestamp}" ;;
     esac
 

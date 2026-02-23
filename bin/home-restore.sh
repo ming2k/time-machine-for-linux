@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# System Restore Script
-# Restores system files from backup created by system-backup.sh
+# Home Restore Script
+# Restores home directory from backup created by home-backup.sh
 
 # Get project paths
 SCRIPT_PATH="$(readlink -f "$0")"
@@ -23,8 +23,8 @@ usage() {
     echo -e "${BOLD}Usage:${NC} $0 --source <backup_path> --dest <restore_path> [OPTIONS]"
     echo
     echo -e "${BOLD}Required Parameters:${NC}"
-    echo " --source <path>     : Path to the system backup to restore from"
-    echo " --dest <path>       : Destination path for restore (usually /)"
+    echo " --source <path>     : Path to the home backup to restore from"
+    echo " --dest <path>       : Destination path for restore (usually /home)"
     echo
     echo -e "${BOLD}Options:${NC}"
     echo " --snapshots <path>  : Path for creating pre-restore safety snapshots (optional)"
@@ -33,9 +33,8 @@ usage() {
     echo " --no-snapshot       : Skip pre-restore snapshot creation"
     echo
     echo -e "${BOLD}Features:${NC}"
-    echo " • Full system restoration from backup"
+    echo " • Full home directory restoration from backup"
     echo " • Automatic pre-restore snapshot (if BTRFS and --snapshots provided)"
-    echo " • Validates backup integrity before restore"
     echo " • Preserves ALL file metadata:"
     echo "   - Permissions (including executable bits)"
     echo "   - Owner and group"
@@ -46,18 +45,17 @@ usage() {
     echo
     echo -e "${BOLD}Safety:${NC}"
     echo " • BTRFS snapshot created before restore for rollback (if available)"
-    echo " • System file validation performed"
     echo " • User confirmation required before proceeding"
     echo
     echo -e "${BOLD}Examples:${NC}"
-    echo " # Preview system restore"
-    echo " sudo $0 --source /mnt/@system --dest / --dry-run"
+    echo " # Preview home restore"
+    echo " sudo $0 --source /mnt/@home --dest /home --dry-run"
     echo
-    echo " # Perform system restore with snapshot"
-    echo " sudo $0 --source /mnt/@system --dest / --snapshots /mnt/@snapshots"
+    echo " # Perform home restore with snapshot"
+    echo " sudo $0 --source /mnt/@home --dest /home --snapshots /mnt/@snapshots"
     echo
-    echo " # Perform system restore without snapshot"
-    echo " sudo $0 --source /mnt/@system --dest / --no-snapshot"
+    echo " # Perform home restore without snapshot"
+    echo " sudo $0 --source /mnt/@home --dest /home --no-snapshot"
     echo
     echo " # Show help"
     echo " $0 --help"
@@ -138,7 +136,7 @@ main() {
     parse_arguments "$@"
 
     # Print banner
-    print_banner "System Restore" "$BLUE"
+    print_banner "Home Restore" "$BLUE"
 
     # Check root privileges
     if [ "$EUID" -ne 0 ]; then
@@ -159,9 +157,19 @@ main() {
         SNAPSHOT_PATH=""
     fi
 
-    # Validate restore source
-    if ! validate_system_restore_source "$RESTORE_SOURCE"; then
-        log_msg "ERROR" "Source validation failed"
+    # Validate restore source: must exist and be non-empty
+    if [ ! -d "$RESTORE_SOURCE" ]; then
+        log_msg "ERROR" "Restore source does not exist: $RESTORE_SOURCE"
+        exit 1
+    fi
+
+    if [ ! -r "$RESTORE_SOURCE" ]; then
+        log_msg "ERROR" "Restore source is not readable: $RESTORE_SOURCE"
+        exit 1
+    fi
+
+    if [ -z "$(ls -A "$RESTORE_SOURCE" 2>/dev/null)" ]; then
+        log_msg "ERROR" "Restore source is empty: $RESTORE_SOURCE"
         exit 1
     fi
 
@@ -190,7 +198,7 @@ main() {
         print_banner "Dry Run Preview" "$YELLOW"
 
         # Execute dry-run
-        rsync -aAXHv --info=progress2 --dry-run "${RESTORE_SOURCE}/" "${RESTORE_DEST}/" | tee /tmp/system-restore-dry-run.txt
+        rsync -aAXHv --info=progress2 --dry-run "${RESTORE_SOURCE}/" "${RESTORE_DEST}/" | tee /tmp/home-restore-dry-run.txt
 
         echo
         log_msg "INFO" "Dry-run completed. Review the output above to see what would be restored."
@@ -199,20 +207,20 @@ main() {
     fi
 
     # Get user confirmation
-    echo -e "${BOLD}${RED}⚠ WARNING: This will restore system files and may overwrite current configuration!${NC}"
+    echo -e "${BOLD}${RED}⚠ WARNING: This will restore home directory files and may overwrite current data!${NC}"
     echo -e "${YELLOW}A pre-restore snapshot will be created for rollback capability.${NC}"
     echo
 
-    if ! confirm_execution "system restore" "n" "system" "$RESTORE_DEST" "${SNAPSHOT_PATH:-}"; then
-        log_msg "INFO" "System restore cancelled by user"
+    if ! confirm_execution "home restore" "n" "system" "$RESTORE_DEST" "${SNAPSHOT_PATH:-}"; then
+        log_msg "INFO" "Home restore cancelled by user"
         exit 0
     fi
 
     # Execute restore with snapshot
-    log_msg "INFO" "Starting system restore..."
+    log_msg "INFO" "Starting home restore..."
 
     if execute_restore_with_snapshot "$RESTORE_SOURCE" "$RESTORE_DEST" "$SNAPSHOT_PATH" "system" "false"; then
-        log_msg "SUCCESS" "System restore completed successfully"
+        log_msg "SUCCESS" "Home restore completed successfully"
 
         if [ -n "${PRE_RESTORE_SNAPSHOT:-}" ]; then
             echo
@@ -222,7 +230,7 @@ main() {
 
         exit 0
     else
-        log_msg "ERROR" "System restore failed"
+        log_msg "ERROR" "Home restore failed"
         exit 1
     fi
 }

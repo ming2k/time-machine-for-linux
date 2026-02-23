@@ -23,7 +23,7 @@ test_backup_executor() {
         echo "test data" > "${test_dir}/source/test.txt"
         
         # Execute backup
-        if execute_backup_with_snapshots "$backup_dir" "$snapshot_dir" "test_backup_function"; then
+        if execute_system_backup_with_snapshot "$backup_dir" "$snapshot_dir" "test_backup_function"; then
             # Verify backup
             [ -f "${backup_dir}/test.txt" ] || fail "Backup file not found"
             [ "$(cat "${backup_dir}/test.txt")" = "test data" ] || fail "Backup content mismatch"
@@ -42,7 +42,7 @@ test_backup_executor() {
         chmod 000 "${test_dir}/source"  # Make directory unreadable
         
         # Execute backup (should fail)
-        if execute_backup_with_snapshots "$backup_dir" "$snapshot_dir" "test_backup_function"; then
+        if execute_system_backup_with_snapshot "$backup_dir" "$snapshot_dir" "test_backup_function"; then
             fail "Backup should have failed"
         else
             # Verify no backup was created
