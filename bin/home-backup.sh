@@ -94,7 +94,7 @@ validate_exclude_patterns() {
 # Function to perform home backup
 home_backup_function() {
     # Build rsync command as array (safer than eval)
-    local -a rsync_cmd=(rsync -aAXHv --info=progress2 --delete)
+    local -a rsync_cmd=(rsync -aAXHv --numeric-ids --info=progress2 --delete)
     [ -s "$VALIDATED_EXCLUDE_FILE" ] && rsync_cmd+=(--exclude-from="$VALIDATED_EXCLUDE_FILE")
 
     # Execute rsync

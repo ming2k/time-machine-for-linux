@@ -198,7 +198,7 @@ main() {
         print_banner "Dry Run Preview" "$YELLOW"
 
         # Execute dry-run
-        rsync -aAXHv --info=progress2 --dry-run "${RESTORE_SOURCE}/" "${RESTORE_DEST}/" | tee /tmp/home-restore-dry-run.txt
+        rsync -aAXHv --numeric-ids --info=progress2 --dry-run "${RESTORE_SOURCE}/" "${RESTORE_DEST}/" | tee /tmp/home-restore-dry-run.txt
 
         echo
         log_msg "INFO" "Dry-run completed. Review the output above to see what would be restored."

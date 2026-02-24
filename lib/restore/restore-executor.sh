@@ -38,7 +38,7 @@ execute_restore_with_snapshot() {
     # Execute rsync restore
     log_msg "INFO" "Starting restore from $source_path to $dest_path"
 
-    local rsync_cmd="rsync -aAXHv --info=progress2"
+    local rsync_cmd="rsync -aAXHv --numeric-ids --info=progress2"
 
     # Add dry-run flag if requested
     if [ "$dry_run" = "true" ]; then
@@ -152,7 +152,7 @@ restore_single_source() {
     fi
 
     # Execute rsync
-    local rsync_cmd="rsync -aAXHv --info=progress2"
+    local rsync_cmd="rsync -aAXHv --numeric-ids --info=progress2"
 
     if [ "$dry_run" = "true" ]; then
         rsync_cmd+=" --dry-run"
@@ -233,7 +233,7 @@ execute_selective_restore() {
     # Execute restore with patterns
     log_msg "INFO" "Starting selective restore"
 
-    local rsync_cmd="rsync -aAXHv --info=progress2"
+    local rsync_cmd="rsync -aAXHv --numeric-ids --info=progress2"
 
     if [ "$dry_run" = "true" ]; then
         rsync_cmd+=" --dry-run"
