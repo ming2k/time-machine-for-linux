@@ -77,7 +77,7 @@ create_safety_snapshots() {
     local snapshot_path="${clean_snapshot_dir}/${snapshot_name}"
 
     if btrfs subvolume snapshot "$snapshot_dest_dir" "$snapshot_path" >/dev/null 2>&1; then
-        echo "$snapshot_timestamp"
+        echo "$snapshot_name"
     else
         log_msg "ERROR" "Failed to create snapshot"
         return 1

@@ -61,18 +61,31 @@ check_snapshot_count() {
 }
 
 # Check last backup time and warn if backup is overdue
+# Uses snapshot timestamps (from snapshot names) instead of scanning all files
 check_last_backup_time() {
-    local backup_path="$1"
-    local max_days="${2:-7}"
+    local snapshot_path="$1"
+    local backup_type="$2"
+    local max_days="${3:-7}"
 
-    [[ -z "$backup_path" || ! -d "$backup_path" ]] && return 0
+    [[ -z "$snapshot_path" || ! -d "$snapshot_path" ]] && return 0
 
-    # Find the most recently modified file in backup
-    local last_modified=$(find "$backup_path" -type f -printf '%T@\n' 2>/dev/null | sort -n | tail -1)
-    [[ -z "$last_modified" ]] && return 0
+    # Find the most recent snapshot by name (format: type-backup-YYYYMMDDHHMMSS)
+    local latest_snapshot
+    latest_snapshot=$(find "$snapshot_path" -maxdepth 1 -type d -name "${backup_type}-backup-*" 2>/dev/null | sort | tail -1)
+    [[ -z "$latest_snapshot" ]] && return 0
+
+    # Extract timestamp from snapshot name
+    local timestamp_str
+    timestamp_str=$(basename "$latest_snapshot" | sed "s/${backup_type}-backup-//")
+    [[ -z "$timestamp_str" ]] && return 0
+
+    # Parse YYYYMMDDHHMMSS into epoch
+    local snapshot_epoch
+    snapshot_epoch=$(date -d "${timestamp_str:0:8} ${timestamp_str:8:2}:${timestamp_str:10:2}:${timestamp_str:12:2}" +%s 2>/dev/null)
+    [[ -z "$snapshot_epoch" ]] && return 0
 
     local current_time=$(date +%s)
-    local days_since_backup=$(( (current_time - ${last_modified%.*}) / 86400 ))
+    local days_since_backup=$(( (current_time - snapshot_epoch) / 86400 ))
 
     if [ "$days_since_backup" -gt "$max_days" ]; then
         add_preflight_notice "WARNING" "Last backup: ${days_since_backup} days ago"
@@ -105,7 +118,7 @@ run_preflight_checks() {
     # Run checks
     check_disk_space "$dest_path"
     check_snapshot_count "$snapshot_path"
-    check_last_backup_time "$dest_path"
+    check_last_backup_time "$snapshot_path" "$backup_type"
     check_btrfs_health "$dest_path"
 }
 
