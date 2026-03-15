@@ -58,8 +58,10 @@ lost+found/
 /var/lib/mysql/
 /var/lib/postgres/
 
-# Flatpak and Snap runtime data
-/var/lib/flatpak/runtime/*
+# Flatpak (re-install with flatpak install, save list with: flatpak list --app --columns=application)
+/var/lib/flatpak/
+
+# Snap runtime data
 /var/lib/snapd/snaps/*
 /snap/*/
 
@@ -70,6 +72,26 @@ lost+found/
 /var/lib/containers/cache/*
 /var/lib/containers/storage/overlay-images/*
 /var/lib/containers/storage/overlay-layers/*
+
+# Root user caches and volatile data
+/root/.cache/
+/root/.thumbnails/
+/root/.local/share/Trash/
+
+# Root user dev tool caches
+/root/.cargo/registry/
+/root/.cargo/git/
+/root/.npm/_cacache/
+/root/.ollama/
+
+# Root user tool installs (re-install with respective tools)
+/root/.rustup/
+/root/.local/share/mise/installs/
+/root/.local/share/mise/downloads/
+
+# Root user AI tool caches
+/root/.claude/
+/root/.gemini/
 
 # Podman container configuration and data
 # NOTE: These should be backed up manually using 'podman save' and 'podman export'
