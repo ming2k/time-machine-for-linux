@@ -122,7 +122,7 @@ sudo ./bin/system-backup.sh --source / --dest /mnt/point/@system --snapshots /mn
 
 #### TL;DR
 ```bash
-# Back up /home (dotfiles, config, app state — excluding large data dirs)
+# Back up /home (dotfiles, config, app state, active projects — excluding caches and build artifacts)
 sudo ./bin/home-backup.sh --dest /mnt/point/@home --snapshots /mnt/point/@snapshots
 ```
 
@@ -135,18 +135,22 @@ sudo ./bin/home-backup.sh --dest /mnt/point/@home --snapshots /mnt/point/@snapsh
 .cache/
 .thumbnails/
 
+# Project build artifacts and dependency caches
+projects/**/node_modules/
+projects/**/target/
+projects/**/build/
+
 # Large data directories (manage separately with rsync or a dedicated tool)
 downloads/
 documents/
 pictures/
 music/
 videos/
-projects/
 ```
 
 **Home Backup Features:**
-- **Dotfiles and config**: Captures shell configs, app settings, and user state
-- **Excludes large data**: Directories like `~/projects`, `~/downloads` go into archive backup
+- **Dotfiles, config, and active projects**: Captures shell configs, app settings, and working trees
+- **Excludes rebuildable data**: Caches, package installs, and build artifacts stay out of the backup
 - **Independent restore**: Restore just `/home` without touching the system — clean for distro switches
 - **BTRFS snapshots**: Pre-backup snapshots for safety
 - **User confirmation**: Shows preview before execution
@@ -245,4 +249,3 @@ Three backup tiers + one live storage subvolume, all independent:
 ## License
 
 MIT License - see [LICENSE](LICENSE) file for details.
-

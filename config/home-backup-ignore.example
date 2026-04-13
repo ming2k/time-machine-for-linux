@@ -61,10 +61,15 @@ go/
 .fontconfig/
 
 # Project build artifacts and dependency caches
-# Unambiguous — safe to exclude anywhere
-node_modules/
-__pycache__/
-.dart_tool/
+# Scope these to projects/ so home-level state outside active repos is preserved.
+projects/**/node_modules/
+projects/**/__pycache__/
+projects/**/.dart_tool/
+projects/**/target/
+projects/**/build/
+projects/**/dist/
+projects/**/.pytest_cache/
+projects/**/.mypy_cache/
 
 # Large data directories (manage separately)
 # ...

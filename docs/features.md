@@ -65,10 +65,14 @@ Gitignore-style exclusion patterns:
 .cache/
 .thumbnails/
 
+# Project build artifacts and dependency caches
+projects/**/node_modules/
+projects/**/target/
+projects/**/build/
+
 # Large data directories (manage separately)
 downloads/
 documents/
-projects/
 ```
 
 ## Safety Features

@@ -56,3 +56,5 @@ config/local/
 
 # Personal scripts
 scripts/personal/
+
+.codex
