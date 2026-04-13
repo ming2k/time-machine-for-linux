@@ -216,7 +216,7 @@ Three backup tiers + one live storage subvolume, all independent:
 ### System (`@system`)
 - **Goal**: OS and application state for full system recovery
 - **Method**: Backup everything under `/` EXCEPT excluded items
-- **Excludes**: `/home/` entirely, virtual filesystems, caches, temp files
+- **Excludes**: `/home/` entirely, virtual filesystems, caches, and temporary data such as `/tmp/` and `/var/tmp/`
 
 ### Home (`@home`)
 - **Goal**: User environment — dotfiles, shell config, app settings

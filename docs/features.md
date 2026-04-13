@@ -53,6 +53,9 @@ Gitignore-style exclusion patterns:
 
 # Temporary files
 /tmp/*
+/tmp/.*
+/var/tmp/*
+/var/tmp/.*
 *.tmp
 ```
 
