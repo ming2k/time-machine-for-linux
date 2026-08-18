@@ -38,6 +38,22 @@ sudo ./bin/home-backup.sh --dest /mnt/@home --snapshots /mnt/@snapshots
 
 ## Configuration
 
+Exclusion patterns live in `config/system-backup-ignore` and
+`config/home-backup-ignore` (copy the matching `.example` file to start).
+Every rule follows the framework in [backup-principles.md](backup-principles.md):
+
+- **System** — keep what a bare restore needs to boot into a working machine;
+  exclude rebuildable state (caches, package downloads, logs, container/VM
+  runtime data).
+- **Home** — keep data by rarity (irreplaceable → hard to refind → actively
+  used); exclude re-obtainable bulk (toolchains, package stores, public
+  datasets, build artifacts).
+
+Patterns are passed to rsync `--exclude-from`, which is *similar to but not
+identical with* gitignore — notably, `!negation` **cannot re-include inside an
+excluded directory**. See the "Pattern Semantics" section of
+[backup-principles.md](backup-principles.md) before writing patterns.
+
 ### System Backup (`config/system-backup-ignore`)
 
 Gitignore-style exclusion patterns:
@@ -56,7 +72,6 @@ Gitignore-style exclusion patterns:
 /tmp/.*
 /var/tmp/*
 /var/tmp/.*
-*.tmp
 ```
 
 ### Home Backup (`config/home-backup-ignore`)
@@ -75,7 +90,6 @@ projects/**/build/
 
 # Large data directories (manage separately)
 downloads/
-documents/
 ```
 
 ## Safety Features
@@ -164,5 +178,6 @@ Logs written to `logs/backup-YYYYMMDD.log`:
 
 ## Related Documentation
 
+- [Backup Principles](backup-principles.md) — the philosophy behind every exclusion rule
 - [Preflight Checks](preflight-checks.md)
 - [CLAUDE.md](../CLAUDE.md) - Developer guide

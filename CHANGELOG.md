@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- `docs/backup-principles.md` — the deciding framework for what gets backed up:
+  system is backed up for recoverability, data by rarity tiers (irreplaceable →
+  hard to refind → actively used), with anti-hoarding rules and rsync
+  `--exclude-from` pattern semantics (including why `!negation` cannot
+  re-include inside an excluded directory)
+
+### Changed
+- Expanded `config/home-backup-ignore`: AI/session tool caches (codex, kimi-code,
+  pnpm store, npm `_npx`, claude versions), flatpak Chrome/Firefox profile caches,
+  rebuildable toolchains (`sdks/`, `applications/`, `vms/`), public datasets
+  (kiwix ZIM), uv; every rule now annotated with its principle and rebuild path
+- Expanded `config/system-backup-ignore`: `var/lib/postgresql` (was
+  postgres-only), mariadb/redis/mongodb data dirs, full docker/containerd/lxc
+  runtime exclusion, libvirt images, `var/crash`, `/.snapshots`, `/efi`,
+  snapd cache, root's npm/mise/containers state
+- Fixed misleading negation examples in ignore configs — rsync does not
+  re-include inside an excluded directory; docs now show the sibling-exclusion
+  pattern instead
+- README and features.md link the new principles document
+
 ## [3.0.0] - 2026-02-23
 
 ### Added

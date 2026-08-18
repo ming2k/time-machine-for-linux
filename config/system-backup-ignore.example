@@ -1,147 +1,127 @@
 # System Backup Ignore Configuration
-# This file contains gitignore-style patterns for files and directories
-# to exclude from system backups. Patterns support wildcards and negation.
+# Gitignore-style patterns for rsync --exclude-from (see docs/backup-principles.md
+# for the principles behind every rule and the exact pattern semantics).
+#
+# Principle: the system is backed up for RECOVERABILITY, not preservation.
+# Keep what a bare restore needs to boot into a working machine; exclude
+# everything rebuildable (caches, logs, tmp) and bulk runtime data that is
+# exported/handled separately (containers, VMs, databases).
 
-# Lost+found directories
-lost+found/
-
-# Virtual filesystems and special directories
+# Virtual filesystems and special directories (never copy these)
 /proc/*
-/proc/*
+/proc/.*
 /sys/*
+/sys/.*
 /dev/*
+/dev/.*
 /run/*
 /run/.*
-
 /tmp/*
 /tmp/.*
 /var/tmp/*
 /var/tmp/.*
+lost+found/
 
-# Non-local file system
+# Non-local filesystems (mount points — backup only real, local data)
 /mnt/*
+/mnt/*/
 /media/*
+/media/*/
 /net/*
+/net/*/
 
-# Snapshots if it exists
+# BTRFS snapshots subvolume, if mounted at root
+/.snapshots/
 /snapshots/
 
-# Boot and EFI partitions (usually backed up separately)
+# Boot/EFI: separate partitions, not part of the root fs — back up the ESP
+# separately if needed (kernel/initramfs live in /boot which IS included)
 /boot/efi/*
+/boot/efi/.*
+/efi/*
 
 # Swap files and hibernation
 /swapfile
 /swap.img
-/hiberfil.sys
 *.swap
 
-# System logs (often too large and regenerated)
+# System logs (regenerated; extract what you need to keep, not bulk journals)
 /var/log/*.log
+/var/log/*.log.*
 /var/log/*.gz
 /var/log/journal/*
 /var/log/audit/*
+/var/crash/
 
-# Package manager caches
+# Coredumps (tier 5)
+/var/lib/systemd/coredump/*
+
+# Package manager caches (re-downloadable — tier 4)
 /var/cache/pacman/pkg/*
 /var/cache/apt/archives/*
 /var/cache/yum/*
 /var/cache/dnf/*
 /var/cache/zypper/*
-
-# Application caches and temporary data
+# Everything else under /var/cache (keep the directory, drop contents)
 /var/cache/*
+/var/cache/.*
+
+# Spool and transient daemon state
 /var/spool/*
 /var/lib/dhcp/*
-/var/lib/systemd/coredump/*
 
-# Database runtime files
+# Databases: data dirs are runtime bulk data — dump them separately
+# (pg_dump / mysqldump) instead of copying live files (they may be mid-write
+# and restore is version-dependent)
 /var/lib/mysql/
+/var/lib/mariadb/
 /var/lib/postgres/
+/var/lib/postgresql/
+/var/lib/redis/
+/var/lib/mongodb/
 
-# Flatpak (re-install with flatpak install, save list with: flatpak list --app --columns=application)
+# Container runtimes: image layers are re-pullable (tier 4); running state is
+# exported via podman save / docker commit if it matters
+/var/lib/docker/
+/var/lib/containerd/
+/var/lib/lxc/
+/var/lib/containers/storage/
+/var/lib/containers/cache/
+
+# Virtualization images — re-create from cloud/install media, or export
+# deliberately (virt-clone / qcow2 copy) outside the scheduled backup
+/var/lib/libvirt/images/
+
+# Flatpak runtimes and apps (re-install: flatpak install; keep your app list:
+# flatpak list --app --columns=application > flatpaks.txt, which IS backed up
+# in /root or /var/lib/flatpak-overrides)
 /var/lib/flatpak/
 
-# Snap runtime data
+# Snap runtime data (snaps are re-downloadable)
 /var/lib/snapd/snaps/*
+/var/lib/snapd/cache/*
 /snap/*/
 
-# Container runtime data
-/var/lib/docker/containers/*/
-/var/lib/containerd/io.containerd.runtime.v*/
-/var/lib/lxc/*/rootfs/
-/var/lib/containers/cache/*
-/var/lib/containers/storage/overlay-images/*
-/var/lib/containers/storage/overlay-layers/*
+# Home directory (backed up separately by home-backup.sh)
+/home/
 
-# Root user caches and volatile data
+# Root user's caches and rebuildable tool state (same rules as home backup)
 /root/.cache/
 /root/.thumbnails/
 /root/.local/share/Trash/
-
-# Root user dev tool caches
 /root/.cargo/registry/
 /root/.cargo/git/
 /root/.npm/_cacache/
+/root/.npm/_npx/
 /root/.ollama/
-
-# Root user tool installs (re-install with respective tools)
 /root/.rustup/
 /root/.local/share/mise/installs/
 /root/.local/share/mise/downloads/
-
-# Root user AI tool caches
+/root/.local/share/containers/storage/
+/root/.config/containers/
 /root/.claude/
 /root/.gemini/
 
-# Podman container configuration and data
-# NOTE: These should be backed up manually using 'podman save' and 'podman export'
-# Reason: Direct backup/restore may corrupt containers, wastes space, and lacks portability
-# See docs/preflight-checks.md for manual backup instructions
-/home/*/.config/containers/*
-/home/*/.config/containers/.*
-/root/.config/containers/*
-/root/.config/containers/.*
-/home/*/.local/share/containers/storage/*
-/home/*/.local/share/containers/storage/.*
-/root/.local/share/containers/storage/*
-/root/.local/share/containers/storage/.*
-
-# User cache and temporary directories
-/home/*/.cache/*
-/home/*/.local/share/Trash/*
-/home/*/.local/share/containers/cache/*
-
-# Gnome Desktop files
-/home/*/.thumbnails/*
-/home/*/.gvfs/*
-
-# Browser caches and temporary files
-/home/*/.mozilla/firefox/*/Cache/*
-/home/*/.cache/chromium/*
-/home/*/.cache/google-chrome/*
-/home/*/.cache/mozilla/*
-
-# Development temporary files
-/home/*/.ollama/
-/home/*/.npm/_cacache/*
-/home/*/.npm/_cacache/.*
-/home/*/.cargo/registry/*
-/home/*/.cargo/registry/.*
-/home/*/.gradle/caches/*
-/home/*/.gradle/caches/.*
-/home/*/.m2/repository/*
-/home/*/.m2/repository/.*
-/home/*/.local/share/containers/storage/overlay/*
-/home/*/.local/share/containers/storage/overlay/.*
-
-# IDE and editor temporary files
-/home/*/.vscode/extensions/*/
-/home/*/.local/share/JetBrains/*/
-
-# Large media files that may be duplicates
-/home/*/Downloads/*
-/home/*/Downloads/.*
-
-# Negation examples (uncomment to include specific items)
-# !/var/log/important.log
-# !/home/*/important-cache/
+# Negation note: rsync does NOT re-include inside an excluded directory.
+# To keep one file (e.g. a specific log), exclude its siblings or the parent
+# directory's other contents instead of  /var/log/  +  !/var/log/important.log

@@ -204,6 +204,20 @@ sudo ./bin/home-restore.sh --source /mnt/point/@home --dest /home --no-snapshot
 
 ## Backup Principles
 
+The deciding framework for **what to back up and what to exclude** is
+documented in [docs/backup-principles.md](docs/backup-principles.md). The
+short version:
+
+- **System** is backed up for *recoverability*: keep what a bare restore needs
+  to boot into a working machine; drop everything rebuildable (caches, package
+  downloads, logs).
+- **Data** is backed up *by rarity*: irreplaceable personal data first
+  (documents, vaults, photos), then hard-to-refind material, then actively
+  used resources. Re-obtainable bulk (package caches, toolchains, distro
+  packages, public datasets) is excluded — a lockfile or manifest replaces it.
+- **No hoarding**: "I have it" is not a reason to back something up. Dormant
+  data goes to `@archive` deliberately, not along for every ride.
+
 Three backup tiers + one live storage subvolume, all independent:
 
 | Subvolume | Role | Script |
@@ -217,12 +231,14 @@ Three backup tiers + one live storage subvolume, all independent:
 - **Goal**: OS and application state for full system recovery
 - **Method**: Backup everything under `/` EXCEPT excluded items
 - **Excludes**: `/home/` entirely, virtual filesystems, caches, and temporary data such as `/tmp/` and `/var/tmp/`
+- See [Backup Principles](backup-principles.md) for the reasoning behind each exclusion
 
 ### Home (`@home`)
 - **Goal**: User environment — dotfiles, shell config, app settings
 - **Method**: Backup `/home` with cache and large-data exclusions
 - **Excludes**: `.cache/`, dev tool caches, and large data dirs you manage separately
 - **Key benefit**: Restore just home after a distro switch without touching `/`
+- See [Backup Principles](backup-principles.md) — data is kept by rarity, not by habit
 
 ### Data (`@data`) — Live Storage Extension
 - **Goal**: Extend internal disk capacity with the external drive
