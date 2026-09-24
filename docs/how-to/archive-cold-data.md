@@ -1,31 +1,24 @@
 # How to Archive Cold Data to `@archive`
 
-This practical guide demonstrates how to safely retire finished projects, completed videos, or large dormant datasets from your active internal storage (`/data`) to external cold storage (`@archive`), freeing up internal NVMe space without risk of data loss.
+This practical guide demonstrates how to safely retire finished projects, completed videos, or large dormant datasets from your active internal storage to external cold storage (`@archive`), freeing up internal NVMe space without risk of data loss.
 
 ---
 
 ## 1. Prerequisites
 
 1. An external backup drive formatted with a BTRFS `@archive` subvolume (and optionally `@snapshots`).
-2. The external drive mounted to `/mnt` (e.g. `/mnt/@archive` and `/mnt/@snapshots`).
+2. The external drive mounted to `/mnt` (via `sudo ./tm mount /dev/sdX`).
 3. Root or `sudo` privileges.
 
 ---
 
-## 2. Managing Cold Data Locally (Staging Approach)
+## 2. Defensive Dual-Staging Architecture
 
-Instead of maintaining a separate permanent internal disk for cold storage, use a local staging folder on `/data`:
+The system operates a **Defensive Dual-Staging Model**:
+- **Primary Canonical Staging (`/data/archive/`)**: The official long-term home for cold data staged on your secondary high-capacity NVMe drive.
+- **Defensive Historical Staging (`/home/*/archive/`)**: Acknowledges legacy or habitual archive directories in user home folders so that no assets are missed.
 
-```bash
-# Create local staging directory if not already existing
-mkdir -p /data/archive
-```
-
-When a project is finished or assets are no longer actively accessed:
-```bash
-# Move inactive project to local staging folder
-mv /data/projects/old-website-2023 /data/archive/
-```
+Both staging paths are **strictly excluded from routine daily backups** (`tm backup`) by contract, ensuring cold archives never contaminate hot/warm mirrors.
 
 ---
 
@@ -33,68 +26,48 @@ mv /data/projects/old-website-2023 /data/archive/
 
 When your external backup drive is plugged in and mounted at `/mnt`:
 
-### Basic Archive Sync (Append-Only)
+### Autodiscover and Archive All Staging Exits
+Simply run:
 ```bash
-sudo ./bin/archive-sync.sh --source /data/archive/ --dest /mnt/@archive --snapshots /mnt/@snapshots
+sudo ./tm archive
 ```
 
-* **Append-Only guarantee**: Unlike `system-backup.sh` or `data-backup.sh`, the archive script **never uses `--delete`**. Any data already existing on `@archive` remains permanently preserved.
-* **Metadata preservation**: Full permissions, timestamps, ACLs, and ownership are transferred.
+* **Autodiscovery**: Automatically scans for non-empty exits at `/data/archive/` and `/home/*/archive/`, presents the list and total sizes, and synchronizes all pending exits with one confirmation.
+* **Append-Only guarantee**: The archive engine **NEVER uses `--delete`**. Any data already existing on `@archive` remains permanently preserved.
+* **Metadata preservation**: Full Linux permissions, timestamps, ACLs, and ownership are transferred.
 * **BTRFS Read-Only snapshot**: Automatically creates an immutable snapshot (e.g. `/mnt/@snapshots/archive-batch-20261024120000`) for tamper protection.
 
 ---
 
-## 4. Archiving with Content Checksum Verification
+## 4. Archiving with Checksum & Freeing Local NVMe Space
 
-For long-term assets where bit-for-bit integrity must be verified before local deletion, use the `--checksum` (`-c`) flag:
-
-```bash
-sudo ./bin/archive-sync.sh \
-  --source /data/archive/ \
-  --dest /mnt/@archive \
-  --snapshots /mnt/@snapshots \
-  --checksum
-```
-
----
-
-## 5. Freeing Local NVMe Space Safely
-
-To safely reclaim internal disk space, pass `--clean-source`:
+For long-term assets where bit-for-bit integrity must be verified before local deletion, use `--checksum` and `--clean-source`:
 
 ```bash
-sudo ./bin/archive-sync.sh \
-  --source /data/archive/ \
-  --dest /mnt/@archive \
-  --snapshots /mnt/@snapshots \
-  --checksum \
-  --clean-source
+sudo ./tm archive --checksum --clean-source
 ```
 
 **Workflow:**
-1. The script synchronizes all new files to `/mnt/@archive`.
-2. Verifies bitstream checksums.
+1. Synchronizes all new files across active staging exits to `/mnt/@archive`.
+2. Verifies bitstream checksums against physical media.
 3. Generates a read-only BTRFS snapshot on `@snapshots`.
-4. Prompts you explicitly: `Do you want to permanently delete local source files in '/data/archive' to free disk space? [y/N]`
-5. Only upon answering `y`, the local `/data/archive/` staging directory is emptied.
+4. Prompts you explicitly for each staging exit: `Permanently delete contents of '<path>' to free local disk space? [y/N]`
+5. Only upon answering `y`, local files are deleted, instantly recovering gigabytes of internal disk space.
 
 ---
 
-## 6. Selective Ad-Hoc Directory Archiving
+## 5. Selective Single-Directory Archiving
 
-If you prefer not to stage files into `/data/archive/`, you can archive any directory directly:
+If you wish to archive a specific directory without autodiscovery:
 
 ```bash
 # Archive a specific inactive project directly
-sudo ./bin/archive-sync.sh \
-  --source /data/projects/legacy-firmware-v1 \
-  --dest /mnt/@archive/projects/ \
-  --clean-source
+sudo ./tm archive /home/ming/archive/projects/ --dest /mnt/@archive/projects/ --clean-source
 ```
 
 ---
 
-## 7. Verifying Archive Storage
+## 6. Verifying Archive Storage
 
 Inspect your archived contents on the backup drive:
 
