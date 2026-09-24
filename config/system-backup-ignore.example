@@ -24,11 +24,8 @@ lost+found/
 
 # Non-local filesystems (mount points — backup only real, local data)
 /mnt/*
-/mnt/*/
 /media/*
-/media/*/
 /net/*
-/net/*/
 
 # BTRFS snapshots subvolume, if mounted at root
 /.snapshots/
