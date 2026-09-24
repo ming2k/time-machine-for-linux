@@ -23,7 +23,8 @@ sudo tm <command> [OPTIONS]
 | `mount` | `m` | `<dev> [-m <base>] [--level <1-22>]` | Unlock LUKS container and mount all subvolumes (`@system`, `@home`, `@data`, `@archive`, `@snapshots`, `@media`). |
 | `unmount` | `um` | `[-m <base>] [--no-close]` | Reverse-order clean unmount and automatic LUKS container locking. |
 | `status` | `st` | `[-m <base>]` | Detailed view of LUKS state and per-subvolume storage consumption. |
-| `prune` | `p` | `[-k <N>] [-t <tier>] [--apply]` | Inspect and prune expired snapshots (**default: safe dry-run preview**; requires `--apply`). |
+| `snapshots` | `snaps` | `[-s <path>]` | Formatted table of all snapshots, tiers, and creation timestamps. |
+| `prune` | `p` | `[pattern] [-k <N>] [-t <tier>] [--apply]` | Prune expired or targeted dirty snapshots (**default: safe dry-run**; requires `--apply`). |
 | `cleanup` | `c` | `[-t <tier>] [--execute]` | Remove files matching newly added ignore rules from destination. |
 | `format` | `f` | `-d <dev> [-l <label>]` | Safe LUKS2 + 5 BTRFS subvolumes drive initialization. |
 
@@ -165,14 +166,16 @@ sudo ./tools/backup-all.sh [-m <base>] [OPTIONS]
 
 ### `tools/prune-snapshots.sh`
 
-Snapshot retention and pruning engine to prevent disk space exhaustion.
+Snapshot retention and pruning engine to prevent disk space exhaustion. Supports policy-based retention (`--keep`) and targeted pattern deletion.
 
 ```bash
-sudo ./tools/prune-snapshots.sh [-s <path>] [OPTIONS]
+sudo ./tools/prune-snapshots.sh [OPTIONS] [SNAPSHOT_OR_PATTERN...]
 ```
 
 | Parameter | Default | Description |
 |---|---|---|
+| `-l, --list` | — | Display formatted table of all snapshots and exit. |
+| `[pattern...]` | — | Specific snapshot names or glob patterns to delete (e.g. `*1301*`). |
 | `-s, --snapshots <path>` | `/mnt/@snapshots` | Path to BTRFS snapshot repository. |
 | `-k, --keep <N>` | `10` | Number of most recent snapshots to preserve per tier. |
 | `-t, --tier <tier>` | `all` | Specific tier to prune (`system`, `home`, `data`, `archive`, or `all`). |

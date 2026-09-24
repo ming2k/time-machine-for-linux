@@ -51,7 +51,8 @@ ${BOLD}Drive Lifecycle Commands:${NC}
   ${CYAN}format${NC}          Initialize new external drive with LUKS2 & 5 BTRFS subvolumes
 
 ${BOLD}Maintenance Commands:${NC}
-  ${CYAN}prune, p${NC}        Inspect & prune expired BTRFS snapshots (${DIM}default: dry-run${NC})
+  ${CYAN}snapshots, snaps${NC} List all BTRFS snapshots with formatted timestamps
+  ${CYAN}prune, p${NC}        Inspect & prune expired or dirty snapshots (${DIM}default: dry-run${NC})
   ${CYAN}cleanup, c${NC}      Remove files matching updated ignore rules from destination
 
 ${BOLD}Options:${NC}
@@ -221,6 +222,7 @@ main() {
         mount|m)           dispatch_mount "$@" ;;
         unmount|umount|um) dispatch_unmount "$@" ;;
         status|st)         dispatch_status "$@" ;;
+        snapshots|snaps)   exec "${TOOLS_DIR}/prune-snapshots.sh" --list "$@" ;;
         prune|p)           dispatch_prune "$@" ;;
         restore|r)         dispatch_restore "$@" ;;
         cleanup|c)         dispatch_cleanup "$@" ;;
