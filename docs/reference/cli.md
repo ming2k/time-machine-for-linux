@@ -25,6 +25,7 @@ sudo tm <command> [OPTIONS]
 | `status` | `st` | `[-m <base>]` | Detailed view of LUKS state and per-subvolume storage consumption. |
 | `snapshots` | `snaps` | `[-s <path>]` | Formatted table of all snapshots, tiers, and creation timestamps. |
 | `prune` | `p` | `[pattern] [-k <N>] [-t <tier>] [--apply]` | Prune expired or targeted dirty snapshots (**default: safe dry-run**; requires `--apply`). |
+| `balance` | `bal` | `[path] [--quick\|--normal\|--deep]` | Safe filtered BTRFS balance to reclaim sparse chunks and unallocated space. |
 | `cleanup` | `c` | `[-t <tier>] [--execute]` | Remove files matching newly added ignore rules from destination. |
 | `format` | `f` | `-d <dev> [-l <label>]` | Safe LUKS2 + 5 BTRFS subvolumes drive initialization. |
 
@@ -197,6 +198,23 @@ sudo ./tools/format-btrfs-luks.sh -d <device> [-n <luks_name>] [-l <label>]
 | `-d, --device <dev>` | Required | Target block device to format. Refuses mounted or system-critical drives. |
 | `-n, --name <name>` | `backup_crypt` | LUKS device mapper container name. |
 | `-l, --label <label>` | `TimeMachine` | BTRFS filesystem volume label. |
+
+---
+
+### `tools/balance-btrfs.sh`
+
+Reclaims locked unallocated BTRFS chunks by consolidating under-utilized block groups via filtered thresholds.
+
+```bash
+sudo ./tools/balance-btrfs.sh [OPTIONS] [MOUNT_PATH]
+```
+
+| Parameter | Default | Description |
+|---|---|---|
+| `MOUNT_PATH` | `/mnt` | BTRFS mountpoint to balance. |
+| `--quick` | — | Fast pass consolidating chunks with <10% utilization (takes seconds). |
+| `--normal` | Selected | Balanced consolidation for chunks with <50% data / <30% metadata utilization. |
+| `--deep` | — | Aggressive consolidation for chunks with <75% data / <50% metadata utilization. |
 
 ---
 

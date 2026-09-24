@@ -53,6 +53,7 @@ ${BOLD}Drive Lifecycle Commands:${NC}
 ${BOLD}Maintenance Commands:${NC}
   ${CYAN}snapshots, snaps${NC} List all BTRFS snapshots with formatted timestamps
   ${CYAN}prune, p${NC}        Inspect & prune expired or dirty snapshots (${DIM}default: dry-run${NC})
+  ${CYAN}balance, bal${NC}    Reclaim locked/sparse BTRFS chunks to recover unallocated space
   ${CYAN}cleanup, c${NC}      Remove files matching updated ignore rules from destination
 
 ${BOLD}Options:${NC}
@@ -173,6 +174,11 @@ dispatch_format() {
     exec "${TOOLS_DIR}/format-btrfs-luks.sh" "$@"
 }
 
+# Subcommand: balance
+dispatch_balance() {
+    exec "${TOOLS_DIR}/balance-btrfs.sh" "$@"
+}
+
 # Subcommand: restore
 dispatch_restore() {
     if [[ $# -eq 0 || "${1:-}" =~ ^(-h|--help)$ ]]; then
@@ -224,6 +230,7 @@ main() {
         status|st)         dispatch_status "$@" ;;
         snapshots|snaps)   exec "${TOOLS_DIR}/prune-snapshots.sh" --list "$@" ;;
         prune|p)           dispatch_prune "$@" ;;
+        balance|bal)       dispatch_balance "$@" ;;
         restore|r)         dispatch_restore "$@" ;;
         cleanup|c)         dispatch_cleanup "$@" ;;
         format|f)          dispatch_format "$@" ;;

@@ -83,7 +83,7 @@ Detailed documentation is organized using the [Diátaxis](https://diataxis.fr/) 
 | Quadrant | Focus | Description |
 |---|---|---|
 | **[Tutorials](docs/tutorials/)** | Learning | [Getting Started from Scratch](docs/tutorials/getting-started.md) — 15-minute complete walkthrough. |
-| **[How-To Guides](docs/how-to/)** | Problem Solving | Practical runbooks for [System Restore](docs/how-to/system-backup-and-restore.md), [Home Migration](docs/how-to/home-backup-and-restore.md), [Data Recovery](docs/how-to/data-backup-and-restore.md), [Cold Archiving](docs/how-to/archive-cold-data.md), and [Drive Formatting](docs/how-to/format-btrfs-drive.md). |
+| **[How-To Guides](docs/how-to/)** | Problem Solving | Practical runbooks for [System Restore](docs/how-to/system-backup-and-restore.md), [Home Migration](docs/how-to/home-backup-and-restore.md), [Data Recovery](docs/how-to/data-backup-and-restore.md), [Cold Archiving](docs/how-to/archive-cold-data.md), [Drive Formatting](docs/how-to/format-btrfs-drive.md), and [Snapshot Pruning & BTRFS Balance](docs/how-to/maintain-btrfs-and-prune-snapshots.md). |
 | **[Reference](docs/reference/)** | Lookup | Authoritative [CLI Parameter Specs](docs/reference/cli.md) and [Configuration Syntax](docs/reference/configuration.md). |
 | **[Explanation](docs/explanation/)** | Understanding | Deep dives into [Storage Architecture](docs/explanation/storage-architecture.md), [Backup Principles](docs/explanation/backup-principles.md), and [Preflight Checks](docs/explanation/preflight-checks.md). |
 
