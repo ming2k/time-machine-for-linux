@@ -65,3 +65,14 @@ vms/images/*.tmp
 # ------------------------------------------------ tier 2/3: cold archives (managed via tm archive)
 archive/
 /archive/
+
+# ------------------------------------------------ tier 5: unbacked scratchpad & safehouse zones
+# Ephemeral scratch spaces, temporary media, or disposable testbeds (never backed up)
+scratch/
+/scratch/
+safehouse/
+/safehouse/
+media/
+/media/
+no-backup/
+/no-backup/

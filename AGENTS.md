@@ -40,6 +40,8 @@ When modifying or generating code, AI assistants must strictly respect these sys
   `bin/data-backup.sh` must strictly exclude rebuildable build caches, lock-replaceable dependency trees (`node_modules/`, `target/`, `.venv/`, `dist/`), and volatile artifacts.
 - **`[INV-TIER-04] Cold Archive Append-Only Invariant`**:
   `bin/archive-sync.sh` must **NEVER** execute with `--delete`. The destination is a permanent sediment reservoir. Data must never be purged from `@archive` during synchronization.
+- **`[INV-TIER-05] Safehouse Scratch Zone Invariant`**:
+  Paths designated as disposable safehouses or scratchpads (`scratch/`, `safehouse/`, `media/`, `no-backup/`) are permanently excluded by contract from all active backup tiers (`@system`, `@home`, `@data`). AI assistants must never remove or bypass these exclusions.
 
 ### 2.2 Filesystem & Privilege Invariants (`[INV-SYS-*]`)
 - **`[INV-SYS-01] Metadata Preservation`**:

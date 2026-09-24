@@ -50,3 +50,23 @@ ls -d /mnt/@snapshots/data-backup-*
 # 2. Copy the intact project tree back
 rsync -aAXv /mnt/@snapshots/data-backup-20261024120000/projects/my-app/ /data/projects/my-app/
 ```
+
+---
+
+## 4. Using the Safehouse / Scratchpad (`/data/scratch`)
+
+For temporary large files (downloading 50GB movies, unpacking raw datasets, disposable ISOs) that you **do not want backed up**:
+
+### 1. Store Files Safely
+Place files directly in `/data/scratch/` (or `/data/media/`):
+```bash
+cp /mnt/@media/movie.mkv /data/scratch/
+```
+`tm backup` automatically ignores this entire tree. Your backup drive will not be filled with disposable media.
+
+### 2. Instant Wiping via BTRFS
+When done, you can instantly wipe hundreds of gigabytes in 0.1 seconds without slow `rm -rf` recursion:
+```bash
+# Recreate the subvolume in milliseconds
+btrfs subvolume delete /data/scratch && btrfs subvolume create /data/scratch
+```

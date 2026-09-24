@@ -50,7 +50,7 @@ Active mirror tiers (`tm backup`) automatically purge destination files matching
 
 ### Home Backup (`home-backup-ignore`)
 - **Tier 5 Caches**: `.cache/`, `.thumbnails/`, `.local/share/Trash/`, `.var/app/*/cache/`
-- **Package Stores**: `.cargo/registry/`, `.npm/_cacache/`, `.local/share/pnpm/store/`
+- **Package Stores**: `.cargo/registry/`, `.npm/_cacache/`, `.local/share/pnpm/store/`, `go/pkg/`
 - **Runtime Toolchains**: `.rustup/`, `.local/share/uv/`, `.local/share/mise/installs/`
 
 ### Data Backup (`data-backup-ignore`)

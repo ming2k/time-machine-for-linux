@@ -15,7 +15,9 @@ Modern Linux workstations often segregate high-speed I/O workloads across multip
  │    └── /home  (Personal configurations, desktop state, dotfiles)
  │
  └── NVMe 2 (High Capacity, Warm)
-      └── /data  (Active Git repositories, local workspaces, databases)
+      ├── /data/projects (Active Git repositories, local workspaces)
+      ├── /data/archive  (Local staging area for cold export)
+      └── /data/scratch  (Unbacked safehouse: disposable media & temp testbeds)
            │
            │ (Periodic Synchronization or Low-Frequency Archival)
            ▼
@@ -24,6 +26,7 @@ Modern Linux workstations often segregate high-speed I/O workloads across multip
  ├── @home       (User home mirror)
  ├── @data       (Workspace mirror)
  ├── @archive    (Append-Only cold sediment)
+ ├── @media      (Independent media library)
  └── @snapshots  (Immutable point-in-time BTRFS snapshots)
 ```
 
@@ -72,3 +75,16 @@ A critical distinction exists between **Mirror Syncing** and **Archiving**:
 | **Verification** | Fast mtime & size comparisons. | Optional cryptographic `--checksum` content checks. |
 
 This architectural boundary guarantees that when you delete an old 100GB finished project from `/data` to reclaim internal NVMe space, the external `@archive` copy remains permanently safe.
+
+---
+
+## 5. The Unbacked Safehouse (`/data/scratch`)
+
+Users frequently handle temporary large media (e.g. 50GB 4K videos borrowed from `@media`), unpack large temporary datasets, or run disposable VM experiments.
+
+If placed in normal directories, these gigabyte-heavy files would unintentionally trigger massive backup syncs, quickly exhausting external backup storage.
+
+To solve this, the architecture establishes a dedicated **Safehouse Zone** (`/data/scratch` or `/data/media`):
+- **Ignored by Contract**: Strictly excluded in `config/data-backup-ignore` and `config/home-backup-ignore`.
+- **Zero Backup Footprint**: `tm backup` skips it unconditionally.
+- **Instant BTRFS Destruction**: Built as a dedicated BTRFS subvolume on `/data`, allowing hundreds of gigabytes of disposable clutter to be wiped atomically in 0.1 seconds without filesystem fragmentation.

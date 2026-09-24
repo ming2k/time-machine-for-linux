@@ -127,6 +127,7 @@ lost+found/
 /root/.local/share/Trash/
 /root/.cargo/registry/
 /root/.cargo/git/
+/root/go/pkg/
 /root/.npm/_cacache/
 /root/.npm/_npx/
 /root/.ollama/

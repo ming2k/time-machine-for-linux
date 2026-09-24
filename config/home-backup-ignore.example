@@ -40,6 +40,7 @@
 .npm/_npx/
 .cargo/registry/
 .cargo/git/
+go/pkg/
 .gradle/caches/
 .m2/repository/
 .local/share/JetBrains/
@@ -93,6 +94,13 @@ projects/**/build/
 projects/**/dist/
 projects/**/.pytest_cache/
 projects/**/.mypy_cache/
+
+# ------------------------------------------------ tier 5: unbacked scratchpad & safehouse zones
+# Ephemeral scratch spaces, temporary media, or disposable testbeds (never backed up)
+scratch/
+safehouse/
+media/
+no-backup/
 
 # Negation note: rsync does NOT re-include inside an excluded directory.
 # To keep one subtree (e.g. Steam saves), exclude its siblings instead:
