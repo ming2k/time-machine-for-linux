@@ -61,3 +61,7 @@ models/cache/
 *.iso
 vms/instances/
 vms/images/*.tmp
+
+# ------------------------------------------------ tier 2/3: cold archives (managed via tm archive)
+archive/
+/archive/

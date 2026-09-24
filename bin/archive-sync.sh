@@ -56,8 +56,8 @@ usage() {
 # Parse command line arguments
 parse_arguments() {
     SOURCE_PATH=""
-    DEST_PATH=""
-    SNAPSHOT_PATH=""
+    DEST_PATH="/mnt/@archive"
+    SNAPSHOT_PATH="/mnt/@snapshots"
     USE_CHECKSUM=false
     CLEAN_SOURCE=false
     DRY_RUN=false
@@ -118,13 +118,17 @@ parse_arguments() {
     done
 
     if [ -z "$SOURCE_PATH" ]; then
-        log_msg "ERROR" "Missing required parameter: --source"
-        usage
+        if [ -d "/data/archive" ]; then
+            SOURCE_PATH="/data/archive"
+        else
+            log_msg "ERROR" "Missing required parameter: --source (and default /data/archive not found)"
+            usage 1
+        fi
     fi
 
     if [ -z "$DEST_PATH" ]; then
         log_msg "ERROR" "Missing required parameter: --dest"
-        usage
+        usage 1
     fi
 }
 
