@@ -102,8 +102,24 @@ lost+found/
 /var/lib/snapd/cache/*
 /snap/*/
 
-# Home directory (backed up separately by home-backup.sh)
+# Wright package manager:
+# Preserved (backed up):
+#   - /var/lib/wright/plans/        (Plan source repo / uncommitted local plans)
+#   - /var/lib/wright/folios/       (System deployment manifests)
+#   - /var/lib/wright/wright.db*    (Package registry and transaction history)
+#   - /var/lib/wright/ledger/       (Build audits and historical records)
+#   - /var/lib/wright/parts/        (Built binary packages: source of truth for repair)
+# Excluded (rebuildable, unpackable cache or transient state):
+/var/lib/wright/sources/*
+/var/lib/wright/store/*
+/var/lib/wright/staging/*
+/var/lib/wright/rollback/*
+/var/lib/wright/lock/*
+/var/log/wright/*
+
+# Home and data directories (backed up separately by home-backup.sh / data-backup.sh)
 /home/
+/data/
 
 # Root user's caches and rebuildable tool state (same rules as home backup)
 /root/.cache/

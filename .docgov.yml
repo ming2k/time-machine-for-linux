@@ -1,0 +1,55 @@
+version: "0.0.3"
+
+# Remote Upstream & Protocol Distribution
+upstream:
+  source: "https://github.com/ming2k/docs-governance"
+  ref: "v0.0.3"
+
+# Canonical Governance Documentation Mirror (for Agent Context)
+governance_docs:
+  install: true
+  target_dir: "docs/governance/documentation"
+
+# [INV-LINT-01] Root Location Sanitization
+root_sanitization:
+  enforce: true
+  allowed_markdown:
+    - "README.md"
+    - "CHANGELOG.md"
+    - "CONTRIBUTING.md"
+    - "AGENTS.md"
+    - "LICENSE.md"
+    - "SECURITY.md"
+    - "CLAUDE.md"
+
+# [INV-LINT-02] Contributor Firewall Bindings
+firewall:
+  public_surfaces:
+    - "docs/tutorials/**"
+    - "docs/how-to/**"
+    - "docs/reference/**"
+    - "docs/explanation/**"
+  internal_surfaces:
+    - "docs/dev/**"
+
+# [INV-LINT-03] Architecture & Metadata Profile
+architecture:
+  adr_path: "docs/adr"
+  require_frontmatter:
+    status_enum: ["draft", "accepted", "superseded", "rejected", "deprecated"]
+    mandatory_fields: ["id", "title", "status", "date"]
+
+# [INV-LINT-05] Agent Directives Binding
+agent_directives:
+  enforce: true
+  targets:
+    - "AGENTS.md"
+
+# [INV-LINT-04] Code-to-Doc Trigger Bindings
+triggers:
+  - watch: "src/api/**"
+    require_update: "docs/reference/**"
+    message: "Public API modified; docs/reference/ must be synchronized in the same commit."
+  - watch: "src/cli/**"
+    require_update: "docs/how-to/**"
+    message: "CLI syntax changed; docs/how-to/ must be synchronized in the same commit."

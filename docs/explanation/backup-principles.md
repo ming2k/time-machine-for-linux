@@ -67,9 +67,10 @@ checks when in doubt:
 
 | What | Where it lands |
 |------|----------------|
-| Tier 1–3 data | `home-backup.sh` → `@home` (config: `config/home-backup-ignore`) |
+| Tier 1–3 personal config & home data | `home-backup.sh` → `@home` (config: `config/home-backup-ignore`) |
+| Tier 1–3 projects & data disk assets | `data-backup.sh` → `@data` (config: `config/data-backup-ignore`) |
 | System, recoverable-only | `system-backup.sh` → `@system` (config: `config/system-backup-ignore`) |
-| Tier 4 bulk downloads, media libraries, game installs | excluded from backups; `@data` live storage or manual download |
+| Tier 4 bulk downloads, media libraries, game installs | excluded from backups; live storage or manual download |
 | Dormant Tier 2–3 data | `@archive`, cold, manual |
 
 When adding a pattern to an ignore file, comment **why** (which principle, how
@@ -105,7 +106,6 @@ identical with* gitignore:
 
 - Keep patterns **anchored and specific**; broad basename patterns
   (`build/`, `cache/`) surprise you years later.
-- After editing, verify with `--dry-run` and preview the real transfer list
-  before trusting a new rule. Remember that files already present in the
-  backup destination but newly excluded are *not* removed by rsync `--delete` —
-  use `tools/cleanup-excluded.sh` to prune them.
+- After editing, verify with `--dry-run` to preview the transfer list.
+- **Autonomous Self-Healing**: Active mirror tiers (`@system`, `@home`, `@data`) operate under `--delete --delete-excluded --force`. When ignore rules expand, the live mirror automatically purges newly excluded items to maintain strict fidelity with your active configuration, while prior states remain permanently protected in immutable BTRFS snapshots (`@snapshots`).
+- See [ADR-0002](../adr/0002-self-healing-mirror-reconciliation.md) for full architectural rationale.

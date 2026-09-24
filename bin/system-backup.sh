@@ -98,9 +98,10 @@ validate_exclude_patterns() {
 # Function to perform system backup
 system_backup_function() {
     # Build rsync command as array (safer than eval)
-    local -a rsync_cmd=(rsync -aAXHv --numeric-ids --info=progress2 --delete)
+    local -a rsync_cmd=(rsync -aAXHv --numeric-ids --info=progress2 --delete-before --delete-excluded --force --stats)
     [ -s "$VALIDATED_EXCLUDE_FILE" ] && rsync_cmd+=(--exclude-from="$VALIDATED_EXCLUDE_FILE")
 
+    log_msg "INFO" "Synchronizing mirror (pruning obsolete/excluded items before transfer)..."
     # Execute rsync
     local rsync_status
     "${rsync_cmd[@]}" "$SOURCE_DIR/" "$BACKUP_DIR/"

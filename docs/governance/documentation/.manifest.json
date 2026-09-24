@@ -1,0 +1,164 @@
+{
+  "schema": "docs-governance/manifest",
+  "schema_version": 2,
+  "name": "docs-governance",
+  "description": "Universal documentation governance: semantic coordinate tensor core with pluggable vertical domain entities.",
+  "license": "MIT",
+  "homepage": "https://github.com/ming/docs-governance",
+  "protocol_version": "6.0.0",
+  "protocol_history": [
+    {
+      "version": "6.0.0",
+      "date": "2026-08-25",
+      "status": "current",
+      "summary": "Protocol v6.0.0 Clean Break: Zero-Vendoring Architecture, Flat Knowledge Topology, in-place Frontmatter lifecycle, and bifurcated invariants (INV-LINT machine layer and INV-AGENT cognitive layer)."
+    },
+    {
+      "version": "5.1.0",
+      "date": "2026-08-25",
+      "status": "superseded",
+      "summary": "Standardize Decision Summary and Primary Invariant column in ADR registry index pattern."
+    },
+    {
+      "version": "5.0.0",
+      "date": "2026-08-25",
+      "status": "superseded",
+      "summary": "Clean-Break Architecture: Universal Semantic Tensor Core (taxonomy, invariants, workflow, style) and pluggable vertical domain entities (ADR, RFC, Living Snapshot, Acceptance, Testing, Postmortem)."
+    },
+    {
+      "version": "4.0.0",
+      "date": "2026-08-25",
+      "status": "superseded",
+      "summary": "Transitional reorganization to spec directory."
+    },
+    {
+      "version": "3.2.0",
+      "date": "2026-08-25",
+      "status": "superseded",
+      "summary": "Enhance Architecture profile with Log vs Snapshot duality, RFC vs ADR separation of concerns, and ADR compaction pattern."
+    },
+    {
+      "version": "3.1.0",
+      "date": "2026-08-25",
+      "status": "superseded",
+      "summary": "Streamline Product Validation profile to dual-tier model (acceptance.md and testing.md)."
+    },
+    {
+      "version": "3.0.0",
+      "date": "2026-08-24",
+      "status": "superseded",
+      "summary": "Modular Governance Architecture: micro-core protocol decoupled from pluggable domain profiles."
+    },
+    {
+      "version": "2.0.0",
+      "date": "2026-08-23",
+      "status": "superseded",
+      "summary": "Three routing gates with root-files exception and manifest for drift detection."
+    },
+    {
+      "version": "1.0.0",
+      "date": "2026-06-13",
+      "status": "superseded",
+      "summary": "Initial flat Diataxis decision list."
+    }
+  ],
+  "update_policy": "Semantic versioning on protocol_version. MAJOR: a repository following the old protocol would be non-compliant without migration work. MINOR: new optional profiles or non-breaking additions; old content stays valid. PATCH: clarifications and typo-level changes that do not alter any rule.",
+  "files": {
+    "AGENTS.md": {
+      "role": "guard",
+      "profile": "core",
+      "editable": false,
+      "sha256": "f0ac07a502a783817c9261a250765b5b8e6bda5099d1ee663418163b9db9b67c"
+    },
+    "contracts.md": {
+      "role": "template",
+      "profile": "core",
+      "editable": true,
+      "sha256": ""
+    },
+    "core/index.md": {
+      "role": "charter",
+      "profile": "core",
+      "editable": false,
+      "sha256": "64013eec2ac263814a9275668be68bf0b69ffebb94d5eac03dd2ea593a32497e"
+    },
+    "core/invariants.md": {
+      "role": "constitution",
+      "profile": "core",
+      "editable": false,
+      "sha256": "1dc779f7655bb529ee465c956d886af813185795ad91b07c422aa1e6fbb04ba8"
+    },
+    "core/style.md": {
+      "role": "guide",
+      "profile": "core",
+      "editable": false,
+      "sha256": "71fabafd58a8c860f16a7a4c65bb31eb42f40c361bc26d597a7edde387552a90"
+    },
+    "core/taxonomy.md": {
+      "role": "tensor",
+      "profile": "core",
+      "editable": false,
+      "sha256": "06be77ebd061eaf739273802317b5cda41e7160e5dc16fb80b3d9d7bbc732e6e"
+    },
+    "core/workflow.md": {
+      "role": "lifecycle",
+      "profile": "core",
+      "editable": false,
+      "sha256": "bba4f7fc3fba2f75d24c218e8a7533a1abdfb698cb55fce404dfe07a46873414"
+    },
+    "profiles/architecture/adr.md": {
+      "role": "entity",
+      "profile": "architecture",
+      "editable": false,
+      "sha256": "d259e2a8bb45c15cafdda34368a5f8565687e57e4891f5aff830f8db38594171"
+    },
+    "profiles/architecture/index.md": {
+      "role": "charter",
+      "profile": "architecture",
+      "editable": false,
+      "sha256": "16431fad3816959b053c9e7d8f2073febdfbf389b06286d1f1b3805bfb0c6936"
+    },
+    "profiles/architecture/living-snapshot.md": {
+      "role": "entity",
+      "profile": "architecture",
+      "editable": false,
+      "sha256": "e9bd0d62d56c3dff8fac7d2d3428b3751d492fd79e33f50f4ae3882251459a23"
+    },
+    "profiles/architecture/rfc.md": {
+      "role": "entity",
+      "profile": "architecture",
+      "editable": false,
+      "sha256": "15c4e9a2962b2e131032b845b4d2cb810331ac642e011b1e8096187d37dabd37"
+    },
+    "profiles/operations/index.md": {
+      "role": "charter",
+      "profile": "operations",
+      "editable": false,
+      "sha256": "735252f455b6b453092e61e98b78dc00e86f07e111abc64a925579b628bc2a1c"
+    },
+    "profiles/operations/postmortem.md": {
+      "role": "entity",
+      "profile": "operations",
+      "editable": false,
+      "sha256": "610c4339b7498cd292ffec85e82673aa903200fcfc4fd99a5628b2f696e9eaee"
+    },
+    "profiles/validation/acceptance.md": {
+      "role": "entity",
+      "profile": "validation",
+      "editable": false,
+      "sha256": "ee6e546e835335f8e896410bc8a4d9e981b94a51a5ce6135a796b7f22d893121"
+    },
+    "profiles/validation/index.md": {
+      "role": "charter",
+      "profile": "validation",
+      "editable": false,
+      "sha256": "1698410d19e2e196bd9cdf226ef41eb2af9ab6bf8551266d756cc4fad4596684"
+    },
+    "profiles/validation/testing.md": {
+      "role": "entity",
+      "profile": "validation",
+      "editable": false,
+      "sha256": "1e6f2efcec81c9cfa4a2a9c36f05e666f32fddc4c5ed06ef3e97393275436cb6"
+    }
+  }
+}

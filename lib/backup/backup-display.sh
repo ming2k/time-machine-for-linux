@@ -11,7 +11,14 @@ display_backup_details() {
     local snapshot_dir="$4"     # Snapshot directory
     local temp_exclude_file="$5" # Exclude patterns file (optional)
 
-    print_banner "System Backup"
+    local title="Backup"
+    case "$backup_type" in
+        "system") title="System Backup" ;;
+        "home")   title="Home Backup" ;;
+        "data")   title="Data Backup" ;;
+        *)        title="${backup_type^} Backup" ;;
+    esac
+    print_banner "$title"
 
     echo -e "Source:       ${BOLD}$source_dir${NC}"
     echo -e "Destination:  ${BOLD}$backup_dir${NC}"

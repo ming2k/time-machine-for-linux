@@ -8,14 +8,18 @@
 
 set -euo pipefail
 
+SCRIPT_PATH="$(readlink -f "$0")"
+PROJECT_ROOT="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
+CONFIG_DIR="${PROJECT_ROOT}/config"
+
 # Color codes for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-BOLD='\033[1m'
-DIM='\033[2m'
-NC='\033[0m'
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+BLUE=$'\033[0;34m'
+BOLD=$'\033[1m'
+DIM=$'\033[2m'
+NC=$'\033[0m'
 
 # Respect NO_COLOR
 if [[ -n "${NO_COLOR:-}" ]] || [[ "${TERM:-}" == "dumb" ]]; then
@@ -37,14 +41,18 @@ log_msg() {
 }
 
 show_usage() {
-    echo -e "${BOLD}Usage:${NC} $0 --dest <backup_dir> --config <exclude_config> [--execute]"
+    echo -e "${BOLD}Usage:${NC} $0 [OPTIONS]"
     echo
     echo -e "${BOLD}Description:${NC}"
     echo "  Find and remove files from backup destination that match exclude patterns."
     echo "  When patterns are added to the exclude config after files have been backed up,"
     echo "  those files remain in the destination. This tool cleans them up."
     echo
-    echo -e "${BOLD}Required Parameters:${NC}"
+    echo -e "${BOLD}Tier Shortcut:${NC}"
+    echo "  -t, --tier <tier>   Preset tier: system, home, or data (auto-resolves dest & config)"
+    echo "  -m, --base <path>   Base mount directory when using --tier (default: /mnt)"
+    echo
+    echo -e "${BOLD}Explicit Parameters:${NC}"
     echo "  --dest <path>       Backup destination directory to clean"
     echo "  --config <path>     Exclude configuration file"
     echo
@@ -53,11 +61,14 @@ show_usage() {
     echo "  --help, -h          Show this help message"
     echo
     echo -e "${BOLD}Examples:${NC}"
-    echo "  # Preview what would be cleaned from home backup"
-    echo "  $0 --dest /mnt/@home --config config/home-backup-ignore"
+    echo "  # Preview cleanup on data tier using automatic path deduction"
+    echo "  $0 --tier data"
     echo
     echo "  # Actually clean excluded files from system backup"
-    echo "  $0 --dest /mnt/@system --config config/system-backup-ignore --execute"
+    echo "  $0 --tier system --execute"
+    echo
+    echo "  # Manual explicit paths"
+    echo "  $0 --dest /mnt/@home --config config/home-backup-ignore"
 }
 
 # Parse a pattern into its type flags (modifies caller variables)
@@ -193,6 +204,12 @@ main() {
         fi
     done
 
+    # Help check before root enforcement
+    if [[ $# -eq 0 ]] || [[ "${1:-}" =~ ^(-h|--help|help)$ ]]; then
+        show_usage
+        exit 0
+    fi
+
     # Check root
     if [[ "$EUID" -ne 0 ]]; then
         log_msg "ERROR" "This tool requires root privileges. Please run with sudo."
@@ -200,10 +217,20 @@ main() {
     fi
 
     # Parse arguments
-    local dest="" config="" execute=false
+    local dest="" config="" tier="" base_dir="/mnt" execute=false
 
     while [[ $# -gt 0 ]]; do
         case $1 in
+            -t|--tier)
+                [[ $# -lt 2 ]] && { log_msg "ERROR" "--tier requires an argument (system, home, or data)"; exit 1; }
+                tier="$2"
+                shift 2
+                ;;
+            -m|--base)
+                [[ $# -lt 2 ]] && { log_msg "ERROR" "--base requires a path argument"; exit 1; }
+                base_dir="${2%/}"
+                shift 2
+                ;;
             --dest)
                 [[ $# -lt 2 ]] && { log_msg "ERROR" "--dest requires a path argument"; exit 1; }
                 dest="$2"
@@ -229,6 +256,28 @@ main() {
                 ;;
         esac
     done
+
+    # Resolve tier shortcuts if specified
+    if [[ -n "$tier" ]]; then
+        case "$tier" in
+            system)
+                dest="${base_dir}/@system"
+                config="${CONFIG_DIR}/system-backup-ignore"
+                ;;
+            home)
+                dest="${base_dir}/@home"
+                config="${CONFIG_DIR}/home-backup-ignore"
+                ;;
+            data)
+                dest="${base_dir}/@data"
+                config="${CONFIG_DIR}/data-backup-ignore"
+                ;;
+            *)
+                log_msg "ERROR" "Invalid tier: $tier (must be system, home, or data)"
+                exit 1
+                ;;
+        esac
+    fi
 
     # Validate required parameters
     if [[ -z "$dest" ]]; then

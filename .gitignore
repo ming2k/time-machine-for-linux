@@ -1,6 +1,7 @@
 # Sensitive Info
 system-backup-ignore
 home-backup-ignore
+data-backup-ignore
 
 # Logs
 var/log/*.log

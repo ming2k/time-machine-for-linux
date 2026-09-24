@@ -71,6 +71,7 @@ create_safety_snapshots() {
     case "$snapshot_dest_name" in
         "@system") snapshot_name="system-backup-${snapshot_timestamp}" ;;
         "@home")   snapshot_name="home-backup-${snapshot_timestamp}" ;;
+        "@data")   snapshot_name="data-backup-${snapshot_timestamp}" ;;
         *) snapshot_name="${snapshot_dest_name}-backup-${snapshot_timestamp}" ;;
     esac
 

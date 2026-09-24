@@ -1,0 +1,243 @@
+#!/bin/bash
+
+# tm - Time Machine for Linux Unified Command Line Interface
+# Authoritative single entrypoint for multi-tiered backups, mounting, and snapshot lifecycle.
+
+set -euo pipefail
+
+SCRIPT_PATH="$(readlink -f "$0")"
+PROJECT_ROOT="$(cd "$(dirname "$SCRIPT_PATH")/.." && pwd)"
+BIN_DIR="${PROJECT_ROOT}/bin"
+TOOLS_DIR="${PROJECT_ROOT}/tools"
+
+# Visual formatting
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+BLUE=$'\033[0;34m'
+CYAN=$'\033[0;36m'
+DIM=$'\033[2m'
+BOLD=$'\033[1m'
+NC=$'\033[0m'
+
+if [[ -n "${NO_COLOR:-}" ]] || [[ "${TERM:-}" == "dumb" ]]; then
+    RED='' GREEN='' YELLOW='' BLUE='' CYAN='' DIM='' BOLD='' NC=''
+fi
+
+VERSION="2.0.0"
+
+show_banner() {
+    cat << EOF
+${BOLD}${BLUE}Time Machine for Linux${NC} ${DIM}v${VERSION}${NC}
+${DIM}Apple Time Machine-like tiered backup & cold archiving for Linux${NC}
+EOF
+}
+
+show_help() {
+    show_banner
+    cat << EOF
+
+${BOLD}Usage:${NC} tm <command> [OPTIONS]
+
+${BOLD}Core Commands:${NC}
+  ${CYAN}backup, b${NC}       Run backups (${BOLD}default: all active tiers${NC} System + Home + Data)
+  ${CYAN}archive, a${NC}      Archive cold data to @archive (${BOLD}Append-Only, never deletes${NC})
+  ${CYAN}restore, r${NC}      Restore files from backup or snapshot (system, home, data)
+
+${BOLD}Drive Lifecycle Commands:${NC}
+  ${CYAN}mount, m${NC}        Unlock LUKS & mount all subvolumes (@system, @home, @data, @archive...)
+  ${CYAN}unmount, um${NC}      Unmount all subvolumes cleanly & lock/close LUKS container
+  ${CYAN}status, st${NC}      Inspect drive connection, LUKS state, and subvolume mount usage
+  ${CYAN}format${NC}          Initialize new external drive with LUKS2 & 5 BTRFS subvolumes
+
+${BOLD}Maintenance Commands:${NC}
+  ${CYAN}prune, p${NC}        Inspect & prune expired BTRFS snapshots (${DIM}default: dry-run${NC})
+  ${CYAN}cleanup, c${NC}      Remove files matching updated ignore rules from destination
+
+${BOLD}Options:${NC}
+  -h, --help            Show this help message
+  -v, --version         Show version information
+
+${BOLD}Common Workflow:${NC}
+  1. ${BOLD}tm mount /dev/sdb1${NC}         # Insert drive and mount all subvolumes
+  2. ${BOLD}tm backup${NC}                  # Run full multi-tier backup with 1 confirmation
+  3. ${BOLD}tm unmount${NC}                 # Cleanly unmount and lock container before unplugging
+
+${BOLD}Command Details:${NC}
+  Run ${BOLD}tm <command> --help${NC} for options on any specific command.
+EOF
+    exit "${1:-0}"
+}
+
+# Subcommand: mount
+dispatch_mount() {
+    local -a args=()
+    if [[ $# -gt 0 && "$1" =~ ^/dev/ ]]; then
+        args+=("-d" "$1")
+        shift
+    fi
+    args+=("$@")
+    exec "${TOOLS_DIR}/mountctl.sh" mount "${args[@]}"
+}
+
+# Subcommand: unmount
+dispatch_unmount() {
+    exec "${TOOLS_DIR}/mountctl.sh" unmount "$@"
+}
+
+# Subcommand: status
+dispatch_status() {
+    exec "${TOOLS_DIR}/mountctl.sh" status "$@"
+}
+
+# Subcommand: backup
+dispatch_backup() {
+    local base_dir="/mnt"
+    local run_system=false
+    local run_home=false
+    local run_data=false
+    local user_selected_tier=false
+    local -a extra_args=()
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --system|-s) run_system=true; user_selected_tier=true; shift ;;
+            --home)      run_home=true;   user_selected_tier=true; shift ;;
+            --data|-d)   run_data=true;   user_selected_tier=true; shift ;;
+            -m|--base)   base_dir="${2%/}"; extra_args+=("-m" "$2"); shift 2 ;;
+            -y|--yes)    extra_args+=("-y"); shift ;;
+            -h|--help)
+                cat << EOF
+${BOLD}Usage:${NC} tm backup [OPTIONS]
+
+${BOLD}Description:${NC}
+  Executes Time Machine backups.
+  ${BOLD}By default, runs ALL active tiers${NC} (System + Home + Data) sequentially with 1 confirmation.
+  Specify flags to run only specific tiers.
+
+${BOLD}Options:${NC}
+  --system, -s          Back up only System tier (OS root -> @system)
+  --home                Back up only Home tier (User configs -> @home)
+  --data, -d            Back up only Data tier (Workspaces -> @data)
+  -m, --base <path>     Base mount directory (default: /mnt)
+  -y, --yes             Skip confirmation prompt (unattended mode)
+  -h, --help            Show this help message
+
+${BOLD}Examples:${NC}
+  sudo tm backup                 # Full backup of all tiers (recommended)
+  sudo tm backup --data          # Back up only the /data workspace
+  sudo tm backup --system -y     # Unattended system backup
+EOF
+                exit 0
+                ;;
+            *)
+                extra_args+=("$1")
+                shift
+                ;;
+        esac
+    done
+
+    # Default: If no specific tier requested, run ALL tiers via pipeline
+    if [[ "$user_selected_tier" = false ]]; then
+        exec "${TOOLS_DIR}/backup-all.sh" -m "$base_dir" "${extra_args[@]}"
+    fi
+
+    # Granular execution: Run specific tiers via pipeline switches
+    local -a switches=("-m" "$base_dir")
+    [[ "$run_system" = false ]] && switches+=("--skip-system")
+    [[ "$run_home" = false ]]   && switches+=("--skip-home")
+    [[ "$run_data" = false ]]   && switches+=("--skip-data")
+    switches+=("${extra_args[@]}")
+
+    exec "${TOOLS_DIR}/backup-all.sh" "${switches[@]}"
+}
+
+# Subcommand: archive
+dispatch_archive() {
+    exec "${BIN_DIR}/archive-sync.sh" "$@"
+}
+
+# Subcommand: prune
+dispatch_prune() {
+    exec "${TOOLS_DIR}/prune-snapshots.sh" "$@"
+}
+
+# Subcommand: cleanup
+dispatch_cleanup() {
+    exec "${TOOLS_DIR}/cleanup-excluded.sh" "$@"
+}
+
+# Subcommand: format
+dispatch_format() {
+    exec "${TOOLS_DIR}/format-btrfs-luks.sh" "$@"
+}
+
+# Subcommand: restore
+dispatch_restore() {
+    if [[ $# -eq 0 || "${1:-}" =~ ^(-h|--help)$ ]]; then
+        cat << EOF
+${BOLD}Usage:${NC} tm restore <system|home|data> [OPTIONS]
+
+${BOLD}Description:${NC}
+  Restores files from backup subvolumes or snapshots.
+
+${BOLD}Tiers:${NC}
+  system      Restore OS root from @system
+  home        Restore user configurations from @home
+  data        Restore project workspaces from @data
+
+${BOLD}Examples:${NC}
+  sudo tm restore home --source /mnt/@home --dest /home --dry-run
+  sudo tm restore data --source /mnt/@data --dest /data --snapshots /mnt/@snapshots
+EOF
+        exit 0
+    fi
+
+    local tier="$1"
+    shift
+    case "$tier" in
+        system) exec "${BIN_DIR}/system-restore.sh" "$@" ;;
+        home)   exec "${BIN_DIR}/home-restore.sh" "$@" ;;
+        data)   exec "${BIN_DIR}/data-restore.sh" "$@" ;;
+        *)
+            echo -e "${RED}[ERROR]${NC} Unknown restore tier: $tier (must be system, home, or data)" >&2
+            exit 1
+            ;;
+    esac
+}
+
+# Main entrypoint
+main() {
+    if [[ $# -eq 0 ]]; then
+        show_help 0
+    fi
+
+    local cmd="$1"
+    shift
+
+    case "$cmd" in
+        backup|b)          dispatch_backup "$@" ;;
+        archive|a)         dispatch_archive "$@" ;;
+        mount|m)           dispatch_mount "$@" ;;
+        unmount|umount|um) dispatch_unmount "$@" ;;
+        status|st)         dispatch_status "$@" ;;
+        prune|p)           dispatch_prune "$@" ;;
+        restore|r)         dispatch_restore "$@" ;;
+        cleanup|c)         dispatch_cleanup "$@" ;;
+        format|f)          dispatch_format "$@" ;;
+        -v|--version|version)
+            show_banner
+            exit 0
+            ;;
+        -h|--help|help)
+            show_help 0
+            ;;
+        *)
+            echo -e "${RED}[ERROR]${NC} Unknown command: '$cmd'" >&2
+            echo -e "Run ${BOLD}tm --help${NC} to see available commands." >&2
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"

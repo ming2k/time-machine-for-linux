@@ -1,0 +1,63 @@
+# Data Backup Ignore Configuration
+# Gitignore-style patterns for rsync --exclude-from (see docs/backup-principles.md
+# for the principles behind every rule and the exact pattern semantics).
+#
+# Dedicated to the secondary data disk (/data), housing large active projects,
+# repositories, datasets, and personal data.
+#
+# Decide per entry: is this data (rarity tiers 1-3 -> keep) or is it
+# rebuildable/re-obtainable (tiers 4-5 -> exclude)?
+
+# ---------------------------------------------------------------- tier 5: caches & tmp
+lost+found/
+.cache/
+.thumbnails/
+.Trash-*/
+tmp/
+.tmp/
+*.tmp
+*.bak
+*.swp
+*~
+
+# ------------------------------------------------ tier 4/5: build artifacts & deps
+# Dependency trees and compiler caches (rebuildable via lockfiles)
+node_modules/
+**/node_modules/
+__pycache__/
+**/__pycache__/
+*.pyc
+.venv/
+**/.venv/
+venv/
+**/venv/
+.dart_tool/
+**/.dart_tool/
+target/
+**/target/
+build/
+**/build/
+dist/
+**/dist/
+.pytest_cache/
+**/.pytest_cache/
+.mypy_cache/
+**/.mypy_cache/
+.ruff_cache/
+**/.ruff_cache/
+.turbo/
+**/.turbo/
+.gradle/caches/
+**/gradle/caches/
+.m2/repository/
+**/m2/repository/
+
+# AI tool local model checkpoints or caches (tier 4 - re-downloadable)
+.ollama/
+models/cache/
+
+# ------------------------------------------------ tier 4: bulk re-obtainable media
+# Large ISOs or VM temporary disk images (tier 4)
+*.iso
+vms/instances/
+vms/images/*.tmp

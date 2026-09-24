@@ -13,8 +13,8 @@ if ! load_backup_libs "$LIB_DIR"; then
     exit 1
 fi
 
-# Validate home-backup-ignore config exists
-CONFIG_FILE="${CONFIG_DIR}/home-backup-ignore"
+# Validate data-backup-ignore config exists
+CONFIG_FILE="${CONFIG_DIR}/data-backup-ignore"
 if [ -f "$CONFIG_FILE" ]; then
     if [ ! -r "$CONFIG_FILE" ]; then
         log_msg "ERROR" "Config file exists but is not readable: $CONFIG_FILE"
@@ -45,18 +45,18 @@ usage() {
     echo -e "${BOLD}Usage:${NC} $0 --dest <backup_dir> --snapshots <snapshot_dir> [--source <source_dir>] [OPTIONS]"
     echo
     echo -e "${BOLD}Required Parameters:${NC}"
-    echo " --dest <path>       : Destination directory for backup (must be on BTRFS)"
-    echo " --snapshots <path>  : Directory for storing snapshots (must be on BTRFS)"
+    echo " --dest <path>       : Destination directory for backup (must be on BTRFS, e.g. /mnt/@data)"
+    echo " --snapshots <path>  : Directory for storing snapshots (must be on BTRFS, e.g. /mnt/@snapshots)"
     echo
     echo -e "${BOLD}Optional Parameters:${NC}"
-    echo " --source <path>     : Source directory to backup (default: /home)"
+    echo " --source <path>     : Source directory to backup (default: /data)"
     echo
     echo -e "${BOLD}Options:${NC}"
     echo " --help, -h          : Show this help message"
     echo
     echo -e "${BOLD}Examples:${NC}"
-    echo " $0 --dest /mnt/@home --snapshots /mnt/@snapshots"
-    echo " $0 --dest /mnt/@home --snapshots /mnt/@snapshots --source /home"
+    echo " $0 --dest /mnt/@data --snapshots /mnt/@snapshots"
+    echo " $0 --dest /mnt/@data --snapshots /mnt/@snapshots --source /data"
     exit 1
 }
 
@@ -91,8 +91,8 @@ validate_exclude_patterns() {
     return 0
 }
 
-# Function to perform home backup
-home_backup_function() {
+# Function to perform data backup
+data_backup_function() {
     # Build rsync command as array (safer than eval)
     local -a rsync_cmd=(rsync -aAXHv --numeric-ids --info=progress2 --delete-before --delete-excluded --force --stats)
     [ -s "$VALIDATED_EXCLUDE_FILE" ] && rsync_cmd+=(--exclude-from="$VALIDATED_EXCLUDE_FILE")
@@ -129,7 +129,7 @@ home_backup_function() {
 parse_arguments() {
     BACKUP_DIR=""
     SNAPSHOT_DIR=""
-    SOURCE_DIR="/home"  # Default to /home
+    SOURCE_DIR="/data"  # Default to /data
 
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -217,7 +217,7 @@ VALIDATED_EXCLUDE_FILE=$(mktemp)
 trap 'rm -f "$TEMP_EXCLUDE_FILE" "$VALIDATED_EXCLUDE_FILE"' EXIT
 
 # Parse exclude configuration
-if ! parse_system_exclude_config "${CONFIG_DIR}/home-backup-ignore" "$TEMP_EXCLUDE_FILE"; then
+if ! parse_system_exclude_config "${CONFIG_DIR}/data-backup-ignore" "$TEMP_EXCLUDE_FILE"; then
     log_msg "ERROR" "Failed to parse exclude configuration"
     exit 1
 fi
@@ -228,10 +228,10 @@ if ! validate_exclude_patterns "$TEMP_EXCLUDE_FILE" "$VALIDATED_EXCLUDE_FILE"; t
 fi
 
 # Display backup details
-display_backup_details "system" "$SOURCE_DIR" "$BACKUP_DIR" "$SNAPSHOT_DIR" "$VALIDATED_EXCLUDE_FILE"
+display_backup_details "data" "$SOURCE_DIR" "$BACKUP_DIR" "$SNAPSHOT_DIR" "$VALIDATED_EXCLUDE_FILE"
 
 # Ask for confirmation before proceeding (with preflight check option)
-if confirm_execution "home backup" "n" "system" "$BACKUP_DIR" "$SNAPSHOT_DIR"; then
+if confirm_execution "data backup" "n" "data" "$BACKUP_DIR" "$SNAPSHOT_DIR"; then
     # Verify BTRFS requirements
     if ! is_btrfs_filesystem "$BACKUP_DIR" || ! is_btrfs_filesystem "$SNAPSHOT_DIR"; then
         log_msg "ERROR" "Backup and snapshot paths must be on BTRFS filesystems"
@@ -243,7 +243,7 @@ else
 fi
 
 # Main script execution
-if execute_system_backup_with_snapshot "$BACKUP_DIR" "$SNAPSHOT_DIR" home_backup_function; then
+if execute_system_backup_with_snapshot "$BACKUP_DIR" "$SNAPSHOT_DIR" data_backup_function; then
     show_backup_results "true" "$SNAPSHOT_DIR" "$TIMESTAMP"
     exit 0
 else
