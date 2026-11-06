@@ -3,7 +3,7 @@
 # Restore protection utilities
 # This script provides safety checks and protection mechanisms for restore operations
 
-# Create a pre-restore snapshot of the destination
+# Create a pre-restore snapshot of the destination [INV-RESTORE-01]
 create_pre_restore_snapshot() {
     local dest_path="$1"
     local snapshot_dir="$2"
@@ -22,9 +22,8 @@ create_pre_restore_snapshot() {
 
     # Validate snapshot directory is BTRFS subvolume
     if ! is_btrfs_subvolume "$snapshot_dir"; then
-        log_msg "WARNING" "Snapshot directory is not a BTRFS subvolume: $snapshot_dir"
-        log_msg "WARNING" "Skipping pre-restore snapshot creation"
-        return 0
+        log_msg "ERROR" "Snapshot directory is not a BTRFS subvolume: $snapshot_dir [INV-RESTORE-01]"
+        return 1
     fi
 
     # Create snapshot name with timestamp
@@ -46,15 +45,15 @@ create_pre_restore_snapshot() {
 
     # Validate source is on BTRFS (for snapshot capability)
     if ! is_btrfs_filesystem "$source_for_snapshot"; then
-        log_msg "WARNING" "Destination is not on BTRFS filesystem, skipping snapshot"
-        log_msg "WARNING" "Restore will proceed without rollback capability"
-        return 0
+        log_msg "ERROR" "Destination is not on BTRFS filesystem: $source_for_snapshot [INV-RESTORE-01]"
+        log_msg "ERROR" "Cannot create rollback snapshot on non-BTRFS destination."
+        return 1
     fi
 
     # Create the snapshot
     log_msg "INFO" "Creating pre-restore snapshot: $snapshot_name"
     if ! btrfs subvolume snapshot "$source_for_snapshot" "$snapshot_path" >/dev/null 2>&1; then
-        log_msg "ERROR" "Failed to create pre-restore snapshot: $snapshot_path"
+        log_msg "ERROR" "Failed to create pre-restore snapshot: $snapshot_path [INV-RESTORE-01]"
         return 1
     fi
 
@@ -67,7 +66,41 @@ create_pre_restore_snapshot() {
     return 0
 }
 
-# Validate that restore is safe to proceed
+# Check if a path is safe for restore operations [INV-RESTORE-03]
+is_safe_restore_path() {
+    local path="$1"
+
+    if [ -z "$path" ]; then
+        log_msg "ERROR" "Restore destination path is empty"
+        return 1
+    fi
+
+    # Check if path exists
+    if [ ! -e "$path" ]; then
+        log_msg "ERROR" "Restore destination does not exist: $path"
+        return 1
+    fi
+
+    # Check if path is writable
+    if [ ! -w "$path" ]; then
+        log_msg "ERROR" "Restore destination is not writable: $path"
+        return 1
+    fi
+
+    # Prohibit restoring into protected backup tiers [INV-RESTORE-03, INV-BACKUP-03]
+    local real_p
+    real_p=$(readlink -f "$path" 2>/dev/null || echo "$path")
+    for tier in "@archive" "@snapshots"; do
+        if [[ "$real_p" == *"/$tier" || "$real_p" == *"/$tier/"* ]]; then
+            log_msg "ERROR" "Cannot restore into protected tier '$tier': $path [INV-RESTORE-03]"
+            return 1
+        fi
+    done
+
+    return 0
+}
+
+# Validate that restore is safe to proceed [INV-RESTORE-03]
 validate_restore_safety() {
     local source_path="$1"
     local dest_path="$2"
@@ -76,6 +109,25 @@ validate_restore_safety() {
         log_msg "ERROR" "Missing required parameters for safety validation"
         return 1
     fi
+
+    # Check if source and destination are identical
+    local real_source real_dest
+    real_source=$(readlink -f "$source_path" 2>/dev/null || echo "$source_path")
+    real_dest=$(readlink -f "$dest_path" 2>/dev/null || echo "$dest_path")
+
+    if [ "$real_source" = "$real_dest" ]; then
+        log_msg "ERROR" "Source and destination cannot be identical: $source_path [INV-RESTORE-03]"
+        return 1
+    fi
+
+    # Prohibit restoring into protected backup subvolume tiers [INV-RESTORE-03, INV-BACKUP-03]
+    local protected_tiers=("@archive" "@snapshots")
+    for tier in "${protected_tiers[@]}"; do
+        if [[ "$real_dest" == *"/$tier" || "$real_dest" == *"/$tier/"* ]]; then
+            log_msg "ERROR" "Destination path cannot be inside protected tier '$tier': $dest_path [INV-RESTORE-03]"
+            return 1
+        fi
+    done
 
     # Check if source exists and is readable
     if [ ! -d "$source_path" ]; then
@@ -100,6 +152,21 @@ validate_restore_safety() {
     fi
 
     return 0
+}
+
+# Get system restore exclusion arguments to protect virtual filesystems and mountpoints [INV-RESTORE-03]
+get_system_restore_excludes() {
+    local -a excludes=(
+        "--exclude=/dev/*"
+        "--exclude=/proc/*"
+        "--exclude=/sys/*"
+        "--exclude=/run/*"
+        "--exclude=/tmp/*"
+        "--exclude=/mnt/*"
+        "--exclude=/media/*"
+        "--exclude=/lost+found"
+    )
+    echo "${excludes[*]}"
 }
 
 # Calculate restore impact (estimate what will be changed)
@@ -219,8 +286,19 @@ check_restore_disk_space() {
     if [ "$available_space" -lt "$required_space" ]; then
         local req_human=$(numfmt --to=iec-i --suffix=B "$required_space" 2>/dev/null || echo "$required_space")
         local avail_human=$(numfmt --to=iec-i --suffix=B "$available_space" 2>/dev/null || echo "$available_space")
-        log_msg "ERROR" "Insufficient disk space. Required: $req_human, Available: $avail_human"
-        return 1
+
+        # Account for existing destination files in in-place overwrite scenarios
+        local dest_size
+        dest_size=$(du -sb "$dest_path" 2>/dev/null | cut -f1 || echo 0)
+        local effective_capacity=$((available_space + ${dest_size:-0}))
+
+        if [ "$effective_capacity" -lt "$required_space" ]; then
+            log_msg "ERROR" "Insufficient disk space. Required: $req_human, Available: $avail_human (even accounting for in-place overwrites)"
+            return 1
+        else
+            log_msg "WARNING" "Free space ($avail_human) is less than total source size ($req_human), but in-place overwrites are estimated to fit."
+            return 0
+        fi
     fi
 
     log_msg "INFO" "Disk space check passed"

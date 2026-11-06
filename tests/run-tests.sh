@@ -56,17 +56,17 @@ run_test_file() {
     
     if [[ ! -f "$test_file" ]]; then
         log_warn "Test file not found: $test_file"
-        ((TESTS_SKIPPED++))
+        TESTS_SKIPPED=$((TESTS_SKIPPED + 1))
         return 0
     fi
     
     if [[ ! -x "$test_file" ]]; then
         log_warn "Test file not executable: $test_file"
-        ((TESTS_SKIPPED++))
+        TESTS_SKIPPED=$((TESTS_SKIPPED + 1))
         return 0
     fi
     
-    ((TESTS_TOTAL++))
+    TESTS_TOTAL=$((TESTS_TOTAL + 1))
     
     # Create temporary log file for test output
     local test_log=$(mktemp)
@@ -74,14 +74,14 @@ run_test_file() {
     # Run the test and capture output
     if "$test_file" > "$test_log" 2>&1; then
         log_success "Test passed: $test_name"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         log_error "Test failed: $test_name"
         echo "Test output:"
         cat "$test_log"
         echo
         FAILED_TESTS+=("$test_name")
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
     
     rm -f "$test_log"
@@ -99,16 +99,10 @@ run_unit_tests() {
     fi
     
     # Find and run all unit test files
-    find "$unit_test_dir" -name "test_*.sh" -type f | sort | while read -r test_file; do
+    while IFS= read -r test_file; do
+        [[ -z "$test_file" ]] && continue
         run_test_file "$test_file"
-    done
-    
-    # Also run any direct test files in unit directory
-    for test_file in "$unit_test_dir"/*.sh; do
-        if [[ -f "$test_file" && "$(basename "$test_file")" =~ ^test_.*\.sh$ ]]; then
-            run_test_file "$test_file"
-        fi
-    done
+    done < <(find "$unit_test_dir" -name "*.sh" -type f | sort)
 }
 
 # Run integration tests
@@ -123,9 +117,10 @@ run_integration_tests() {
     fi
     
     # Find and run all integration test files
-    find "$integration_test_dir" -name "test_*.sh" -type f | sort | while read -r test_file; do
+    while IFS= read -r test_file; do
+        [[ -z "$test_file" ]] && continue
         run_test_file "$test_file"
-    done
+    done < <(find "$integration_test_dir" -name "*.sh" -type f | sort)
 }
 
 # Print test summary

@@ -43,6 +43,16 @@ is_safe_restore_path() {
         log_msg "ERROR" "Path is not writable: $path"
         return 1
     fi
+
+    # Prohibit restoring into protected backup tiers [INV-RESTORE-03, INV-BACKUP-03]
+    local real_p
+    real_p=$(readlink -f "$path" 2>/dev/null || echo "$path")
+    for tier in "@archive" "@snapshots"; do
+        if [[ "$real_p" == *"/$tier" || "$real_p" == *"/$tier/"* ]]; then
+            log_msg "ERROR" "Cannot restore into protected tier '$tier': $path [INV-RESTORE-03]"
+            return 1
+        fi
+    done
     
     return 0
 }

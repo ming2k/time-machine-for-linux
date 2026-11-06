@@ -88,10 +88,14 @@ load_restore_libs() {
         "fs/utils.sh"
         "config/parser.sh"
         "config/validator.sh"
+        "restore/restore-protection.sh"
+        "restore/restore-executor.sh"
+        "restore/restore-display.sh"
         "utils/validation.sh"
         "utils/preflight-checks.sh"
         "utils/confirm-execution.sh"
         "utils/display-utils.sh"
+        "utils/rsync-utils.sh"
     )
     
     # Load core libraries first
@@ -136,7 +140,7 @@ discover_modules() {
     local modules=()
     
     # Discover modules in standard directories
-    local search_dirs=("core" "fs" "config" "backup" "ui" "utils")
+    local search_dirs=("core" "fs" "config" "backup" "restore" "ui" "utils")
     
     for dir in "${search_dirs[@]}"; do
         if [ -d "$lib_dir/$dir" ]; then

@@ -195,7 +195,8 @@ ${BOLD}Tiers:${NC}
 
 ${BOLD}Examples:${NC}
   sudo tm restore home --source /mnt/@home --dest /home --dry-run
-  sudo tm restore data --source /mnt/@data --dest /data --snapshots /mnt/@snapshots
+  sudo tm restore home --source /mnt/@home --dest /home --no-snapshot
+  sudo tm restore data --source /mnt/@data --dest /data --snapshots /data/.snapshots
 EOF
         exit 0
     fi

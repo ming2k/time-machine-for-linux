@@ -36,28 +36,28 @@ You will configure a reliable 4-tier storage backup architecture:
 
 ## 3. Step 1: Format External Drive with BTRFS & LUKS
 
-Use the automated initialization script to encrypt the external disk with LUKS2 and create all standard subvolumes (`@system`, `@home`, `@data`, `@archive`, `@snapshots`):
+Use the unified CLI to encrypt the external disk with LUKS2 and establish all 5 standard subvolumes (`@system`, `@home`, `@data`, `@archive`, `@snapshots`):
 
 ```bash
 # WARNING: This will format the specified drive. Replace /dev/sdX with your actual drive.
-sudo ./tools/format-btrfs-luks.sh -d /dev/sdX
+sudo ./tm format -d /dev/sdX
 ```
 
-Follow the prompts to enter your encryption passphrase. The script will format the partition, establish subvolumes, and close the device.
+Follow the prompts to enter your encryption passphrase. The tool formats the partition, establishes standard subvolumes, and locks the device.
 
 ---
 
 ## 4. Step 2: Mount Subvolumes with One Command
 
-Instead of manually running 5 mount commands, use `mountctl.sh` to unlock the LUKS container and mount all subvolumes with zstd compression in one step:
+Unlock the LUKS container and mount all subvolumes with zstd compression in one step:
 
 ```bash
-sudo ./tools/mountctl.sh mount -d /dev/sdX -m /mnt
+sudo ./tm mount /dev/sdX
 ```
 
-Inspect the mount status anytime:
+Inspect the mount status and subvolume disk utilization anytime:
 ```bash
-sudo ./tools/mountctl.sh status -m /mnt
+sudo ./tm status
 ```
 
 ---
@@ -78,40 +78,43 @@ The defaults automatically exclude disposable caches (`.cache/`, `node_modules/`
 
 ## 6. Step 4: Perform Your First Full Backup
 
-You can run all three active tiers in an automated sequence using the unified orchestrator:
+Run all three active tiers (System + Home + Data) sequentially with a single consolidated confirmation prompt:
 
 ```bash
-# Run System, Home, and Data backups sequentially with one unified prompt
-sudo ./tools/backup-all.sh -m /mnt
+sudo ./tm backup
 ```
 
-*(Alternatively, you can run each tier individually: `sudo ./bin/system-backup.sh ...`, `sudo ./bin/home-backup.sh ...`, `sudo ./bin/data-backup.sh ...`)*
+*(Alternatively, you can target a specific tier: `sudo ./tm backup --data` or `sudo ./tm backup --home`)*
 
 ---
 
 ## 7. Step 5: Verify Your Time Machine Snapshots
 
-Every successful run automatically takes an immutable BTRFS snapshot. Inspect your snapshot tree:
+Every successful run automatically takes an immutable BTRFS snapshot. Inspect your snapshot history:
 
 ```bash
-sudo btrfs subvolume list /mnt | grep backup-
+sudo ./tm snapshots
 ```
 
-Output will display snapshots tagged with timestamps:
+Output displays snapshots tagged with tiers and human-readable timestamps:
 ```text
-ID 265 gen 123 top level 5 path @snapshots/system-backup-20261024120000
-ID 266 gen 124 top level 5 path @snapshots/home-backup-20261024120500
-ID 267 gen 125 top level 5 path @snapshots/data-backup-20261024121000
+=== Current BTRFS Snapshots in /mnt/@snapshots ===
+  SNAPSHOT NAME                        TIER         TIMESTAMP
+  ───────────── ──── ─────────
+  system-backup-20261024120000         system       2026-10-24 12:00:00
+  home-backup-20261024120500           home         2026-10-24 12:05:00
+  data-backup-20261024121000           data         2026-10-24 12:10:00
+Total: 3 snapshots
 ```
 
 ---
 
 ## 8. Step 6: Unmount and Lock Drive
 
-When your backup completes and you want to unplug your external drive, cleanly unmount all subvolumes and lock the LUKS device with a single command:
+When your backup completes and you want to unplug your external drive, cleanly unmount all subvolumes and lock the LUKS container with a single command:
 
 ```bash
-sudo ./tools/mountctl.sh unmount -m /mnt
+sudo ./tm unmount
 ```
 
 You now have a fully operational, multi-tiered BTRFS time machine!

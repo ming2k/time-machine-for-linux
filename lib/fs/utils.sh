@@ -18,6 +18,12 @@ check_directory() {
     return 0
 }
 
+# Get absolute path
+get_absolute_path() {
+    local path="$1"
+    readlink -f "$path" 2>/dev/null || realpath "$path"
+}
+
 # Check available disk space
 check_disk_space() {
     local source_dir="$1"

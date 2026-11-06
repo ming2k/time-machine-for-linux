@@ -1,7 +1,9 @@
 #!/bin/bash
 
-source "$(dirname "$0")/../../lib/config-validator.sh"
-source "$(dirname "$0")/../../lib/logging.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIB_DIR="$(cd "$SCRIPT_DIR/../../../lib" && pwd)"
+source "${LIB_DIR}/loader.sh"
+load_backup_libs "$LIB_DIR" >/dev/null 2>&1
 
 test_validate_config_file() {
     # Setup

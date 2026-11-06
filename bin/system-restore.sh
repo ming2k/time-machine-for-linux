@@ -27,10 +27,10 @@ usage() {
     echo " --dest <path>       : Destination path for restore (usually /)"
     echo
     echo -e "${BOLD}Options:${NC}"
-    echo " --snapshots <path>  : Path for creating pre-restore safety snapshots (optional)"
-    echo " --help, -h          : Show this help message"
+    echo " --snapshots <path>  : Path for creating pre-restore safety snapshots (must be on destination filesystem)"
+    echo " --no-snapshot       : Bypass safety snapshot creation (required if --snapshots is omitted)"
     echo " --dry-run           : Preview what would be restored without making changes"
-    echo " --no-snapshot       : Skip pre-restore snapshot creation"
+    echo " --help, -h          : Show this help message"
     echo
     echo -e "${BOLD}Features:${NC}"
     echo " • Full system restoration from backup"
@@ -45,18 +45,19 @@ usage() {
     echo " • Requires root privileges (for ownership preservation)"
     echo
     echo -e "${BOLD}Safety:${NC}"
-    echo " • BTRFS snapshot created before restore for rollback (if available)"
+    echo " • Fail-Closed snapshot abort on failure [INV-RESTORE-01]"
+    echo " • Case-sensitive uppercase 'YES' confirmation [INV-RESTORE-02]"
+    echo " • Automatic exclusion of /proc, /sys, /dev, /run, /tmp, /mnt [INV-RESTORE-03]"
     echo " • System file validation performed"
-    echo " • User confirmation required before proceeding"
     echo
     echo -e "${BOLD}Examples:${NC}"
     echo " # Preview system restore"
     echo " sudo $0 --source /mnt/@system --dest / --dry-run"
     echo
-    echo " # Perform system restore with snapshot"
-    echo " sudo $0 --source /mnt/@system --dest / --snapshots /mnt/@snapshots"
+    echo " # Perform system restore with local snapshot"
+    echo " sudo $0 --source /mnt/@system --dest / --snapshots /.snapshots"
     echo
-    echo " # Perform system restore without snapshot"
+    echo " # Perform system restore without snapshot (e.g. disaster recovery across disks)"
     echo " sudo $0 --source /mnt/@system --dest / --no-snapshot"
     echo
     echo " # Show help"
@@ -146,7 +147,19 @@ main() {
         exit 1
     fi
 
-    # Validate BTRFS for snapshots (if provided)
+    # Validate restore source
+    if ! validate_system_restore_source "$RESTORE_SOURCE"; then
+        log_msg "ERROR" "Source validation failed"
+        exit 1
+    fi
+
+    # Validate restore destination and safety boundaries [INV-RESTORE-03]
+    if ! validate_restore_safety "$RESTORE_SOURCE" "$RESTORE_DEST"; then
+        log_msg "ERROR" "Destination validation failed"
+        exit 1
+    fi
+
+    # Snapshot safety policy [INV-RESTORE-01]
     if [ -n "$SNAPSHOT_PATH" ] && [ "$NO_SNAPSHOT" != true ]; then
         if ! is_btrfs_subvolume "$SNAPSHOT_PATH"; then
             log_msg "ERROR" "Snapshot path must be a BTRFS subvolume: $SNAPSHOT_PATH"
@@ -154,20 +167,8 @@ main() {
             exit 1
         fi
     elif [ -z "$SNAPSHOT_PATH" ] && [ "$NO_SNAPSHOT" != true ]; then
-        log_msg "WARNING" "No snapshot path provided, restore will proceed without pre-restore snapshot"
-        log_msg "WARNING" "Use --snapshots <path> to enable rollback capability"
-        SNAPSHOT_PATH=""
-    fi
-
-    # Validate restore source
-    if ! validate_system_restore_source "$RESTORE_SOURCE"; then
-        log_msg "ERROR" "Source validation failed"
-        exit 1
-    fi
-
-    # Validate restore destination
-    if ! is_safe_restore_path "$RESTORE_DEST"; then
-        log_msg "ERROR" "Destination validation failed"
+        log_msg "ERROR" "No snapshot path provided [INV-RESTORE-01]"
+        log_msg "INFO" "Restore requires rollback safety. Provide --snapshots <path> or explicitly pass --no-snapshot."
         exit 1
     fi
 
@@ -184,13 +185,17 @@ main() {
     local snapshot_info="${SNAPSHOT_PATH:-none (no rollback capability)}"
     display_restore_details "system" "$RESTORE_SOURCE" "$RESTORE_DEST" "$snapshot_info"
 
+    # Get system exclusions for virtual filesystems & mountpoints [INV-RESTORE-03]
+    local system_excludes
+    system_excludes=$(get_system_restore_excludes)
+
     # Dry-run mode
     if [ "$DRY_RUN" = true ]; then
         log_msg "INFO" "Running in dry-run mode - no changes will be made"
         print_banner "Dry Run Preview" "$YELLOW"
 
-        # Execute dry-run
-        rsync -aAXHv --numeric-ids --info=progress2 --dry-run "${RESTORE_SOURCE}/" "${RESTORE_DEST}/" | tee /tmp/system-restore-dry-run.txt
+        # Execute dry-run with system exclusions
+        eval "rsync -aAXHv --numeric-ids --info=progress2 --dry-run $system_excludes '${RESTORE_SOURCE}/' '${RESTORE_DEST}/'" | tee /tmp/system-restore-dry-run.txt
 
         echo
         log_msg "INFO" "Dry-run completed. Review the output above to see what would be restored."
@@ -198,20 +203,16 @@ main() {
         exit 0
     fi
 
-    # Get user confirmation
-    echo -e "${BOLD}${RED}⚠ WARNING: This will restore system files and may overwrite current configuration!${NC}"
-    echo -e "${YELLOW}A pre-restore snapshot will be created for rollback capability.${NC}"
-    echo
-
-    if ! confirm_execution "system restore" "n" "system" "$RESTORE_DEST" "${SNAPSHOT_PATH:-}"; then
+    # Explicit uppercase affirmation required [INV-RESTORE-02]
+    if ! confirm_restore_execution "system" "$RESTORE_SOURCE" "$RESTORE_DEST" "${SNAPSHOT_PATH:-}"; then
         log_msg "INFO" "System restore cancelled by user"
         exit 0
     fi
 
-    # Execute restore with snapshot
+    # Execute restore with snapshot and exclusions
     log_msg "INFO" "Starting system restore..."
 
-    if execute_restore_with_snapshot "$RESTORE_SOURCE" "$RESTORE_DEST" "$SNAPSHOT_PATH" "system" "false"; then
+    if execute_restore_with_snapshot "$RESTORE_SOURCE" "$RESTORE_DEST" "$SNAPSHOT_PATH" "system" "false" "$system_excludes"; then
         log_msg "SUCCESS" "System restore completed successfully"
 
         if [ -n "${PRE_RESTORE_SNAPSHOT:-}" ]; then

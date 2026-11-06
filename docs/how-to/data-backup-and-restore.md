@@ -6,14 +6,13 @@ This guide shows how to safeguard your primary development disk (`/data` — con
 
 ## 1. Backing Up Active Workspaces
 
-Run `data-backup.sh` against the `@data` subvolume:
-
+### Recommended Method: Unified CLI
 ```bash
-sudo ./bin/data-backup.sh \
-  --source /data \
-  --dest /mnt/@data \
-  --snapshots /mnt/@snapshots
+# Back up /data to @data subvolume on mounted drive
+sudo tm backup --data
 ```
+
+*(Underlying engine: `sudo ./bin/data-backup.sh --source /data --dest /mnt/@data --snapshots /mnt/@snapshots`)*
 
 * **Intelligent Pruning**: Heavy compilation outputs and disposable package trees (`node_modules/`, `target/`, `build/`, `.venv/`, `.pytest_cache/`) are ignored via `config/data-backup-ignore`.
 * **Snapshot Point**: A timestamped BTRFS snapshot (`data-backup-YYYYMMDDHHMMSS`) is created on `/mnt/@snapshots` after synchronization.
@@ -31,7 +30,7 @@ If the secondary data drive suffers catastrophic hardware failure and is replace
    ```
 2. Restore all project repositories:
    ```bash
-   sudo ./bin/data-restore.sh \
+   sudo tm restore data \
      --source /mnt/@data \
      --dest /data \
      --no-snapshot

@@ -93,7 +93,7 @@ identical with* gitignore:
   excluded. To keep one subtree, **exclude its siblings** instead of excluding
   the parent and negating:
 
-  ```
+  ```text
   # WRONG ( Steam/userdata is still skipped — rsync never enters Steam/ )
   Steam/
   !Steam/userdata/

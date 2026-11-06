@@ -25,13 +25,15 @@ execute_restore_with_snapshot() {
     # Calculate and display restore impact
     calculate_restore_impact "$source_path" "$dest_path"
 
-    # If not dry-run, create pre-restore snapshot
+    # If not dry-run and snapshot_dir provided, create pre-restore snapshot [INV-RESTORE-01]
     local snapshot_created=false
-    if [ "$dry_run" != "true" ]; then
+    if [ "$dry_run" != "true" ] && [ -n "$snapshot_dir" ]; then
         if create_pre_restore_snapshot "$dest_path" "$snapshot_dir" "$restore_type"; then
             snapshot_created=true
         else
-            log_msg "WARNING" "Failed to create pre-restore snapshot, but continuing..."
+            log_msg "ERROR" "Failed to create pre-restore snapshot for $dest_path [INV-RESTORE-01]"
+            log_msg "ERROR" "Aborting restore to protect existing data (Fail-Closed). No changes were made."
+            return 1
         fi
     fi
 
@@ -144,10 +146,12 @@ restore_single_source() {
         fi
     fi
 
-    # Create pre-restore snapshot for this destination
-    if [ "$dry_run" != "true" ]; then
+    # Create pre-restore snapshot for this destination [INV-RESTORE-01]
+    if [ "$dry_run" != "true" ] && [ -n "$snapshot_dir" ]; then
         if ! create_pre_restore_snapshot "$dest_path" "$snapshot_dir" "data"; then
-            log_msg "WARNING" "Failed to create snapshot for $dest_path, continuing..."
+            log_msg "ERROR" "Failed to create snapshot for $dest_path [INV-RESTORE-01]"
+            log_msg "ERROR" "Aborting restore to protect existing data (Fail-Closed). No changes were made."
+            return 1
         fi
     fi
 
@@ -243,10 +247,12 @@ execute_selective_restore() {
         rsync_cmd+=" $rsync_opts"
     fi
 
-    # Create pre-restore snapshot if not dry-run and snapshot_dir provided
+    # Create pre-restore snapshot if not dry-run and snapshot_dir provided [INV-RESTORE-01]
     if [ "$dry_run" != "true" ] && [ -n "$snapshot_dir" ]; then
         if ! create_pre_restore_snapshot "$dest_path" "$snapshot_dir" "data"; then
-            log_msg "WARNING" "Failed to create pre-restore snapshot, continuing..."
+            log_msg "ERROR" "Failed to create pre-restore snapshot for $dest_path [INV-RESTORE-01]"
+            log_msg "ERROR" "Aborting restore to protect existing data (Fail-Closed). No changes were made."
+            return 1
         fi
     fi
 

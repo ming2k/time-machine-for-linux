@@ -6,14 +6,16 @@ This guide explains how to format an external storage device using LUKS encrypti
 
 ## 1. Automated Setup (Recommended)
 
-Use the built-in formatting script:
+Use the authoritative CLI command:
 
 ```bash
 # WARNING: All existing data on the device will be destroyed!
-sudo ./tools/format-btrfs-luks.sh -d /dev/sdX
+sudo tm format -d /dev/sdX
 ```
 
-The script performs the following automatically:
+*(Underlying engine: `sudo ./tools/format-btrfs-luks.sh -d /dev/sdX`)*
+
+The command performs the following automatically:
 1. Validates the device is a valid block device and ensures it is not mounted on critical system paths (`/`, `/home`, `/data`).
 2. Prompts for explicit typed confirmation (`FORMAT`).
 3. Formats the device with LUKS2 encryption using Argon2id key derivation.
@@ -25,7 +27,7 @@ The script performs the following automatically:
    - `@data`: Active development workspace backups
    - `@archive`: Cold storage append-only sediment
    - `@snapshots`: BTRFS timestamped historical rollback snapshots
-7. Closes and locks the device cleanly, printing the recommended `tools/mountctl.sh mount` command.
+7. Closes and locks the device cleanly, printing the recommended `sudo tm mount /dev/sdX` command.
 
 ---
 

@@ -10,16 +10,16 @@ MAX_LOG_FILES=5
 # Ensure log directory exists with proper permissions
 init_logging() {
     # Create log directory if it doesn't exist
-    mkdir -p "$LOG_DIR"
+    mkdir -p "$LOG_DIR" 2>/dev/null || true
     
     # Set directory permissions (readable by all, writable by owner)
-    chmod 755 "$LOG_DIR"
+    chmod 755 "$LOG_DIR" 2>/dev/null || true
     
     # Create log file if it doesn't exist
-    touch "$LOG_FILE"
+    touch "$LOG_FILE" 2>/dev/null || true
     
     # Set file permissions (readable by all, writable by owner)
-    chmod 644 "$LOG_FILE"
+    chmod 644 "$LOG_FILE" 2>/dev/null || true
     
     # Rotate logs if needed
     rotate_logs
@@ -49,8 +49,10 @@ log_msg() {
     local message="$2"
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
 
-    # Log to file (always with full format)
-    echo "[$timestamp] [$level] $message" >> "$LOG_FILE"
+    # Log to file (always with full format, safe if file not writable)
+    if [[ -n "${LOG_FILE:-}" ]]; then
+        echo "[$timestamp] [$level] $message" >> "$LOG_FILE" 2>/dev/null || true
+    fi
 
     # Log to console - only prefix errors/warnings (searchable)
     case "$level" in

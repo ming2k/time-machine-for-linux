@@ -64,3 +64,38 @@ confirm_execution() {
         esac
     done
 }
+
+# Explicit confirmation for disaster-level restore operations [INV-RESTORE-02]
+# Strictly requires exact case-sensitive uppercase 'YES'. Rejects default Enter, 'y', 'yes', or any other input.
+# Usage: confirm_restore_execution "tier_name" "source_path" "dest_path" ["snapshot_path"]
+confirm_restore_execution() {
+    local tier_name="$1"
+    local source_path="$2"
+    local dest_path="$3"
+    local snapshot_path="${4:-}"
+
+    echo
+    echo -e "${RED}${BOLD}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${RED}${BOLD} ⚠  RESTORE CONFIRMATION REQUIRED  ⚠${NC}"
+    echo -e "${RED}${BOLD}═══════════════════════════════════════════════════════════════${NC}"
+    echo -e "${RED}${BOLD}CAUTION: Restore will overwrite existing files on destination!${NC}"
+    echo -e "${BOLD}Tier:${NC}                ${tier_name}"
+    echo -e "${BOLD}Source Mirror:${NC}       ${source_path}"
+    echo -e "${BOLD}Destination Target:${NC}  ${RED}${BOLD}${dest_path}${NC}"
+    if [ -n "$snapshot_path" ]; then
+        echo -e "${BOLD}Pre-Restore Snapshot:${NC} ${GREEN}${snapshot_path}${NC}"
+    else
+        echo -e "${BOLD}Pre-Restore Snapshot:${NC} ${RED}${BOLD}NONE (Running without safety rollback snapshot)${NC}"
+    fi
+    echo
+    echo -e "${YELLOW}To authorize this operation, type uppercase ${RED}'YES'${NC}${YELLOW} (Enter or 'y' aborts):${NC}"
+
+    read -r -p "Confirm restore? " response
+
+    if [ "$response" = "YES" ]; then
+        return 0
+    else
+        echo -e "${YELLOW}Restore operation cancelled by operator (input was not 'YES').${NC}"
+        return 1
+    fi
+}

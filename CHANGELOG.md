@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Nuo-Aligned Documentation Suite**:
+  - Full Diátaxis information architecture quadrant indexes: `docs/tutorials/index.md`, `docs/how-to/index.md`, `docs/reference/index.md`, `docs/explanation/index.md`.
+  - Bilingual README synchronization: `README.md` and complete Chinese translation `README-zh.md`.
+  - Engineering Standards & Governance suite in `docs/dev/standards/` (`README.md`, `taxonomy.md`, `style.md`, `invariants.md`, `adr.md`).
+  - Architecture blueprint and testing guide: `docs/dev/subsystems.md` and `docs/dev/testing.md`.
+  - End-to-end operational guide `docs/how-to/routine-backup-workflow.md`.
 - `docs/backup-principles.md` — the deciding framework for what gets backed up:
   system is backed up for recoverability, data by rarity tiers (irreplaceable →
   hard to refind → actively used), with anti-hoarding rules and rsync

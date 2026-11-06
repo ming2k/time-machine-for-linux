@@ -1,6 +1,9 @@
 #!/bin/bash
 
-source "$(dirname "$0")/../../lib/logging.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+source "${PROJECT_ROOT}/lib/loader.sh"
+load_backup_libs "${PROJECT_ROOT}/lib" >/dev/null 2>&1
 
 setup_system_test() {
     TEST_ROOT=$(mktemp -d)
@@ -21,12 +24,18 @@ cleanup_system_test() {
 }
 
 test_system_backup() {
+    # Skip if not running as root
+    if [ "$(id -u)" -ne 0 ]; then
+        echo "SKIP: test_system_backup (requires root)"
+        return 0
+    fi
+
     # Setup
     setup_system_test
     trap cleanup_system_test EXIT
     
     # Run backup
-    ../../bin/system-backup.sh "$TEST_ROOT/source" "$TEST_ROOT/backup" "$TEST_ROOT/snapshots"
+    "${PROJECT_ROOT}/bin/system-backup.sh" --source "$TEST_ROOT/source" --dest "$TEST_ROOT/backup" --snapshots "$TEST_ROOT/snapshots"
     
     # Verify essential directories
     for dir in bin etc lib usr; do

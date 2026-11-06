@@ -27,10 +27,10 @@ usage() {
     echo " --dest <path>       : Destination path for restore (usually /data)"
     echo
     echo -e "${BOLD}Options:${NC}"
-    echo " --snapshots <path>  : Path for creating pre-restore safety snapshots (optional)"
-    echo " --help, -h          : Show this help message"
+    echo " --snapshots <path>  : Path for creating pre-restore safety snapshots (must be on destination filesystem)"
+    echo " --no-snapshot       : Bypass safety snapshot creation (required if --snapshots is omitted)"
     echo " --dry-run           : Preview what would be restored without making changes"
-    echo " --no-snapshot       : Skip pre-restore snapshot creation"
+    echo " --help, -h          : Show this help message"
     echo
     echo -e "${BOLD}Features:${NC}"
     echo " • Full data directory restoration from backup"
@@ -44,15 +44,16 @@ usage() {
     echo " • Requires root privileges (for ownership preservation)"
     echo
     echo -e "${BOLD}Safety:${NC}"
-    echo " • BTRFS snapshot created before restore for rollback (if available)"
-    echo " • User confirmation required before proceeding"
+    echo " • Fail-Closed snapshot abort on failure [INV-RESTORE-01]"
+    echo " • Case-sensitive uppercase 'YES' confirmation [INV-RESTORE-02]"
+    echo " • Path identity and protected tier boundary enforcement [INV-RESTORE-03]"
     echo
     echo -e "${BOLD}Examples:${NC}"
     echo " # Preview data restore"
     echo " sudo $0 --source /mnt/@data --dest /data --dry-run"
     echo
-    echo " # Perform data restore with snapshot"
-    echo " sudo $0 --source /mnt/@data --dest /data --snapshots /mnt/@snapshots"
+    echo " # Perform data restore with local snapshot"
+    echo " sudo $0 --source /mnt/@data --dest /data --snapshots /data/.snapshots"
     echo
     echo " # Perform data restore without snapshot"
     echo " sudo $0 --source /mnt/@data --dest /data --no-snapshot"
@@ -144,19 +145,6 @@ main() {
         exit 1
     fi
 
-    # Validate BTRFS for snapshots (if provided)
-    if [ -n "$SNAPSHOT_PATH" ] && [ "$NO_SNAPSHOT" != true ]; then
-        if ! is_btrfs_subvolume "$SNAPSHOT_PATH"; then
-            log_msg "ERROR" "Snapshot path must be a BTRFS subvolume: $SNAPSHOT_PATH"
-            log_msg "INFO" "Create BTRFS subvolume: sudo btrfs subvolume create $SNAPSHOT_PATH"
-            exit 1
-        fi
-    elif [ -z "$SNAPSHOT_PATH" ] && [ "$NO_SNAPSHOT" != true ]; then
-        log_msg "WARNING" "No snapshot path provided, restore will proceed without pre-restore snapshot"
-        log_msg "WARNING" "Use --snapshots <path> to enable rollback capability"
-        SNAPSHOT_PATH=""
-    fi
-
     # Validate restore source: must exist and be non-empty
     if [ ! -d "$RESTORE_SOURCE" ]; then
         log_msg "ERROR" "Restore source does not exist: $RESTORE_SOURCE"
@@ -173,9 +161,22 @@ main() {
         exit 1
     fi
 
-    # Validate restore destination
-    if ! is_safe_restore_path "$RESTORE_DEST"; then
+    # Validate restore destination and safety boundaries [INV-RESTORE-03]
+    if ! validate_restore_safety "$RESTORE_SOURCE" "$RESTORE_DEST"; then
         log_msg "ERROR" "Destination validation failed"
+        exit 1
+    fi
+
+    # Snapshot safety policy [INV-RESTORE-01]
+    if [ -n "$SNAPSHOT_PATH" ] && [ "$NO_SNAPSHOT" != true ]; then
+        if ! is_btrfs_subvolume "$SNAPSHOT_PATH"; then
+            log_msg "ERROR" "Snapshot path must be a BTRFS subvolume: $SNAPSHOT_PATH"
+            log_msg "INFO" "Create BTRFS subvolume: sudo btrfs subvolume create $SNAPSHOT_PATH"
+            exit 1
+        fi
+    elif [ -z "$SNAPSHOT_PATH" ] && [ "$NO_SNAPSHOT" != true ]; then
+        log_msg "ERROR" "No snapshot path provided [INV-RESTORE-01]"
+        log_msg "INFO" "Restore requires rollback safety. Provide --snapshots <path> or explicitly pass --no-snapshot."
         exit 1
     fi
 
@@ -206,12 +207,8 @@ main() {
         exit 0
     fi
 
-    # Get user confirmation
-    echo -e "${BOLD}${RED}⚠ WARNING: This will restore data directory files and may overwrite current data!${NC}"
-    echo -e "${YELLOW}A pre-restore snapshot will be created for rollback capability.${NC}"
-    echo
-
-    if ! confirm_execution "data restore" "n" "data" "$RESTORE_DEST" "${SNAPSHOT_PATH:-}"; then
+    # Explicit uppercase affirmation required [INV-RESTORE-02]
+    if ! confirm_restore_execution "data" "$RESTORE_SOURCE" "$RESTORE_DEST" "${SNAPSHOT_PATH:-}"; then
         log_msg "INFO" "Data restore cancelled by user"
         exit 0
     fi

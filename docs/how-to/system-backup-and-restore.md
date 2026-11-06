@@ -1,6 +1,6 @@
 # How to Back Up and Restore the Operating System
 
-This guide covers operating system backup with `system-backup.sh` and disaster recovery using `system-restore.sh` (including recovery from a Live USB environment).
+This guide covers operating system backup using `tm backup --system` (engine: `bin/system-backup.sh`) and disaster recovery using `tm restore system` (engine: `bin/system-restore.sh`), including recovery from a Live USB environment.
 
 ---
 
@@ -8,20 +8,24 @@ This guide covers operating system backup with `system-backup.sh` and disaster r
 
 The system backup captures installed packages, boot configuration, services, and system binaries under `/`, while strictly excluding `/home/` and `/data/`.
 
+### Recommended Method: Unified CLI
 ```bash
-sudo ./bin/system-backup.sh \
-  --source / \
-  --dest /mnt/@system \
-  --snapshots /mnt/@snapshots
+# Run system backup against mounted drive (default /mnt)
+sudo tm backup --system
+
+# Specify custom mount base if needed
+sudo tm backup --system -m /mnt
 ```
 
+*(Underlying engine: `sudo ./bin/system-backup.sh --source / --dest /mnt/@system --snapshots /mnt/@snapshots`)*
+
 ### Preflight Checks
-Before copying files, the script checks:
+Before copying files, the engine checks:
 - Available disk space on `/mnt/@system`.
 - Health of the destination BTRFS filesystem.
 - Snapshot history and staleness.
 
-A preview prompt will summarize the operation before modifying destination files.
+A preview prompt summarizes the operation before modifying destination files.
 
 ---
 
@@ -31,22 +35,21 @@ If your system is functional but specific binaries or `/etc` configuration got c
 
 ### Step 1: Preview with Dry Run
 ```bash
-sudo ./bin/system-restore.sh \
-  --source /mnt/@system \
-  --dest / \
-  --dry-run
+sudo tm restore system --source /mnt/@system --dest / --dry-run
 ```
 
-### Step 2: Execute Restore with Safety Snapshot
+### Step 2: Execute Restore
 ```bash
-sudo ./bin/system-restore.sh \
-  --source /mnt/@system \
-  --dest / \
-  --snapshots /mnt/@snapshots
+# If your destination is on a BTRFS filesystem with local snapshot subvolume (e.g. /.snapshots):
+sudo tm restore system --source /mnt/@system --dest / --snapshots /.snapshots
+
+# If restoring across disks or without local BTRFS snapshots:
+sudo tm restore system --source /mnt/@system --dest / --no-snapshot
 ```
 
-* The script automatically generates a `pre-restore-system-YYYYMMDDHHMMSS` snapshot of `/` before overwriting files.
-* If anything goes wrong, you can roll back using the pre-restore snapshot.
+* **Fail-Closed Safety [INV-RESTORE-01]**: Under ADR-0003, if `--snapshots` is specified, snapshot creation MUST succeed on the destination filesystem; otherwise, the restore immediately aborts to prevent unshielded overwrites.
+* **Affirmation Prompt [INV-RESTORE-02]**: The script requires typing uppercase `YES` to authorize execution. Pressing Enter or typing lowercase `y` immediately aborts.
+* **Virtual Filesystem Exclusion [INV-RESTORE-03]**: Virtual directories (`/dev/*`, `/proc/*`, `/sys/*`, `/run/*`, `/tmp/*`) and external mountpoints (`/mnt/*`, `/media/*`) are automatically excluded from rsync to protect active kernel subsystems and mounted backup volumes.
 
 ---
 
@@ -64,19 +67,19 @@ When the machine fails to boot:
    ```bash
    sudo cryptsetup open /dev/sda1 backup_crypt
    sudo mount -o subvol=@system /dev/mapper/backup_crypt /backup_system
-   sudo mount -o subvol=@snapshots /dev/mapper/backup_crypt /backup_snapshots
    ```
 4. **Clone or navigate to the repository on Live USB**:
    ```bash
    cd time-machine-for-linux
    ```
-5. **Run restore targeting `/target`**:
+5. **Run restore targeting `/target` (using `--no-snapshot` for cross-disk bare-metal recovery)**:
    ```bash
    sudo ./bin/system-restore.sh \
      --source /backup_system \
      --dest /target \
-     --snapshots /backup_snapshots
+     --no-snapshot
    ```
+   *(When prompted, type uppercase `YES` to confirm.)*
 6. **Reinstall GRUB / update initramfs** (if bootloader was damaged):
    ```bash
    arch-chroot /target

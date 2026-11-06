@@ -119,12 +119,14 @@ sudo ./bin/<script>.sh --source <path> --dest <path> [OPTIONS]
 
 | Parameter | Required | Default | Description |
 |---|---|---|---|
-| `--source <path>` | Yes | — | Path to the backup or snapshot subvolume to restore from. |
-| `--dest <path>` | Yes | — | Destination path on system to restore into. |
-| `--snapshots <path>` | No | — | Path for creating an automatic pre-restore safety snapshot before write. |
+| `--source <path>` | Yes | — | Path to the backup or snapshot subvolume to restore from. Must not match destination ([INV-RESTORE-03]). |
+| `--dest <path>` | Yes | — | Destination path on system to restore into. Prohibited from targeting protected tiers (`@archive`, `@snapshots`). |
+| `--snapshots <path>` | Conditional | — | Path for creating an automatic pre-restore safety snapshot on the destination filesystem ([INV-RESTORE-01]). Required unless `--no-snapshot` is passed. |
+| `--no-snapshot` | Conditional | `false` | Explicitly bypasses safety snapshot creation ([INV-RESTORE-01]). Required if `--snapshots` is omitted. |
 | `--dry-run` | No | `false` | Preview files to be restored without writing changes to disk. |
-| `--no-snapshot` | No | `false` | Bypasses safety snapshot creation. |
 | `--help`, `-h` | No | — | Display usage information and exit. |
+
+> **Safety Notice ([INV-RESTORE-01, INV-RESTORE-02])**: Non-dry-run restore requires typing exact uppercase `YES` to confirm. If `--snapshots` is provided but snapshot creation fails, the restore immediately terminates (Fail-Closed). Virtual filesystems and mountpoints (`/proc/*`, `/sys/*`, `/dev/*`, `/run/*`, `/tmp/*`, `/mnt/*`, `/media/*`) are automatically excluded during OS root restoration ([INV-RESTORE-03]).
 
 ---
 

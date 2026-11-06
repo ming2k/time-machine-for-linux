@@ -8,7 +8,7 @@ Preflight checks automatically run before backup operations and display warnings
 
 When you run a backup operation, preflight checks run automatically:
 
-```
+```text
 System Backup
 ─────────────────────────────────
 Source:       /
@@ -24,7 +24,7 @@ Proceed with system backup? [y/N]
 
 If no issues are detected, you only see the confirmation prompt:
 
-```
+```text
 System Backup
 ─────────────────────────────────
 Source:       /
