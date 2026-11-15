@@ -1,43 +1,59 @@
 # CLI Reference
 
-Technical reference for command-line interfaces in `time-machine-for-linux`.
+Technical reference for the command-line scripts in `time-machine-for-linux`.
+
+All commands are run from the repository root and require root privileges unless noted otherwise.
 
 ---
 
-## Primary Interface: `bin/tm`
+## Command Surface
 
-The authoritative single command-line interface for all Time Machine operations.
+| Task | Script | Key Options |
+|---|---|---|
+| Full backup (System + Home + Data) | `bin/backup-all.sh` | `[-m <base>] [--snapshots <path>] [--skip-system] [--skip-home] [--skip-data] [-y]` |
+| System backup | `bin/system-backup.sh` | `--dest <path> --snapshots <path> [--source <path>]` |
+| Home backup | `bin/home-backup.sh` | `--dest <path> --snapshots <path> [--source <path>]` |
+| Data backup | `bin/data-backup.sh` | `--dest <path> --snapshots <path> [--source <path>]` |
+| Cold archive | `bin/archive-sync.sh` | `[source] [--dest <path>] [--checksum] [--clean-source] [--dry-run] [--no-snapshot]` |
+| System restore | `bin/system-restore.sh` | `--source <path> --dest <path> [--snapshots <path> \| --no-snapshot] [--dry-run]` |
+| Home restore | `bin/home-restore.sh` | `--source <path> --dest <path> [--snapshots <path> \| --no-snapshot] [--dry-run]` |
+| Data restore | `bin/data-restore.sh` | `--source <path> --dest <path> [--snapshots <path> \| --no-snapshot] [--dry-run]` |
+| Mount / unmount / status | `tools/mountctl.sh` | `mount -d <dev> [-m <base>] [--level <1-22>]`, `unmount`, `status` |
+| List snapshots | `tools/prune-snapshots.sh --list` | `[-s <path>]` |
+| Prune snapshots | `tools/prune-snapshots.sh` | `[pattern...] [-k <N>] [-t <tier>] [--apply] [-y]` |
+| BTRFS balance | `tools/balance-btrfs.sh` | `[mount_path] [--quick\|--normal\|--deep]` |
+| Remove newly excluded files | `tools/cleanup-excluded.sh` | `[-t <tier>] [-m <base>] [--dest <path>] [--config <path>] [--execute]` |
+| Format drive | `tools/format-btrfs-luks.sh` | `-d <dev> [-n <luks_name>] [-l <label>]` |
+
+---
+
+## Backup Engines
+
+### `bin/backup-all.sh`
+
+Runs System, Home, and Data backups sequentially with one execution plan and one confirmation.
 
 ```bash
-sudo tm <command> [OPTIONS]
-# or: sudo ./bin/tm <command> [OPTIONS]
+sudo ./bin/backup-all.sh [-m <base>] [OPTIONS]
 ```
 
-### Core Subcommands
+| Parameter | Default | Description |
+|---|---|---|
+| `-m, --base <path>` | `/mnt` | Base directory containing `@system`, `@home`, `@data`, and `@snapshots`. |
+| `--snapshots <path>` | `<base>/@snapshots` | Snapshot directory. |
+| `--source-system <path>` | `/` | System source. |
+| `--source-home <path>` | `/home` | Home source. |
+| `--source-data <path>` | `/data` | Data source. |
+| `--skip-system` | `false` | Skip the system tier. |
+| `--skip-home` | `false` | Skip the home tier. |
+| `--skip-data` | `false` | Skip the data tier. |
+| `-y, --yes` | `false` | Skip the confirmation prompt. |
 
-| Command | Alias | Key Flags | Description |
-|---|---|---|---|
-| `backup` | `b` | `[--system] [--home] [--data] [-m <base>] [-y]` | **Default: runs all active tiers** (System + Home + Data) sequentially with 1 confirmation. Flags scope to specific tiers. |
-| `archive` | `a` | `<source> [--checksum] [--clean-source]` | Append-only cold archiving to `@archive` with tamper-proof read-only BTRFS snapshots. |
-| `restore` | `r` | `<system\|home\|data> --source <src> --dest <dst>` | Restore files from backup subvolume or historical snapshot. |
-| `mount` | `m` | `<dev> [-m <base>] [--level <1-22>]` | Unlock LUKS container and mount all subvolumes (`@system`, `@home`, `@data`, `@archive`, `@snapshots`, `@media`). |
-| `unmount` | `um` | `[-m <base>] [--no-close]` | Reverse-order clean unmount and automatic LUKS container locking. |
-| `status` | `st` | `[-m <base>]` | Detailed view of LUKS state and per-subvolume storage consumption. |
-| `snapshots` | `snaps` | `[-s <path>]` | Formatted table of all snapshots, tiers, and creation timestamps. |
-| `prune` | `p` | `[pattern] [-k <N>] [-t <tier>] [--apply]` | Prune expired or targeted dirty snapshots (**default: safe dry-run**; requires `--apply`). |
-| `balance` | `bal` | `[path] [--quick\|--normal\|--deep]` | Safe filtered BTRFS balance to reclaim sparse chunks and unallocated space. |
-| `cleanup` | `c` | `[-t <tier>] [--execute]` | Remove files matching newly added ignore rules from destination. |
-| `format` | `f` | `-d <dev> [-l <label>]` | Safe LUKS2 + 5 BTRFS subvolumes drive initialization. |
-
----
-
-## Low-Level Engine Modules (Underlying Scripts)
-
-The following scripts function as underlying execution engines orchestrated by `bin/tm`:
+Before running, it verifies that the required destination subvolumes and the snapshot subvolume are mounted.
 
 ### `bin/system-backup.sh`
 
-Creates an incremental backup of the operating system root into a BTRFS subvolume.
+Mirrors the OS root into `@system` and creates a `system-backup-YYYYMMDDHHMMSS` snapshot.
 
 ```bash
 sudo ./bin/system-backup.sh --dest <path> --snapshots <path> [OPTIONS]
@@ -47,14 +63,12 @@ sudo ./bin/system-backup.sh --dest <path> --snapshots <path> [OPTIONS]
 |---|---|---|---|
 | `--dest <path>` | Yes | — | Target backup directory (must be on BTRFS, e.g. `/mnt/@system`). |
 | `--snapshots <path>` | Yes | — | Snapshot destination directory (must be on BTRFS, e.g. `/mnt/@snapshots`). |
-| `--source <path>` | No | `/` | Source directory to backup. |
-| `--help`, `-h` | No | — | Display usage information and exit. |
-
----
+| `--source <path>` | No | `/` | Source directory. |
+| `--help`, `-h` | No | — | Show usage. |
 
 ### `bin/home-backup.sh`
 
-Creates an incremental backup of `/home` user configurations into a BTRFS subvolume.
+Mirrors `/home` into `@home` and creates a `home-backup-YYYYMMDDHHMMSS` snapshot.
 
 ```bash
 sudo ./bin/home-backup.sh --dest <path> --snapshots <path> [OPTIONS]
@@ -64,14 +78,12 @@ sudo ./bin/home-backup.sh --dest <path> --snapshots <path> [OPTIONS]
 |---|---|---|---|
 | `--dest <path>` | Yes | — | Target backup directory (e.g. `/mnt/@home`). |
 | `--snapshots <path>` | Yes | — | Snapshot directory (e.g. `/mnt/@snapshots`). |
-| `--source <path>` | No | `/home` | Source home directory. |
-| `--help`, `-h` | No | — | Display usage information and exit. |
-
----
+| `--source <path>` | No | `/home` | Source directory. |
+| `--help`, `-h` | No | — | Show usage. |
 
 ### `bin/data-backup.sh`
 
-Creates an incremental backup of the `/data` project drive into a BTRFS subvolume.
+Mirrors `/data` into `@data` and creates a `data-backup-YYYYMMDDHHMMSS` snapshot.
 
 ```bash
 sudo ./bin/data-backup.sh --dest <path> --snapshots <path> [OPTIONS]
@@ -81,60 +93,62 @@ sudo ./bin/data-backup.sh --dest <path> --snapshots <path> [OPTIONS]
 |---|---|---|---|
 | `--dest <path>` | Yes | — | Target backup directory (e.g. `/mnt/@data`). |
 | `--snapshots <path>` | Yes | — | Snapshot directory (e.g. `/mnt/@snapshots`). |
-| `--source <path>` | No | `/data` | Source data mount point or directory. |
-| `--help`, `-h` | No | — | Display usage information and exit. |
+| `--source <path>` | No | `/data` | Source directory. |
+| `--help`, `-h` | No | — | Show usage. |
 
 ---
+
+## Cold Archive
 
 ### `bin/archive-sync.sh`
 
-Synchronizes cold data to long-term storage under an **Append-Only** policy (never deletes destination files).
+Copies cold data into `@archive` without passing `--delete`. Sources can be given explicitly or discovered automatically.
 
 ```bash
-sudo ./bin/archive-sync.sh --source <path> --dest <path> [OPTIONS]
+sudo ./bin/archive-sync.sh [SOURCE] [OPTIONS]
 ```
 
 | Parameter | Required | Default | Description |
 |---|---|---|---|
-| `--source <path>` | Yes | — | Local staging directory or completed project path. |
-| `--dest <path>` | Yes | — | Cold storage subvolume (e.g. `/mnt/@archive`). |
-| `--snapshots <path>` | No | — | If provided, creates an immutable read-only snapshot of `@archive`. |
-| `--checksum`, `-c` | No | `false` | Verifies file contents by checksum instead of mod-time/size. |
-| `--clean-source` | No | `false` | Interactively prompts to delete source files after verified transfer. |
-| `--dry-run`, `-n` | No | `false` | Simulates file transfer without making any disk modifications. |
-| `--no-snapshot` | No | `false` | Suppresses automatic BTRFS snapshot creation. |
-| `--help`, `-h` | No | — | Display usage information and exit. |
+| `[SOURCE]` or `--source <path>` | No | Autodiscovery | Local staging directory or completed project path. Without it, the script scans `/data/archive/` and `/home/*/archive/` for non-empty directories. |
+| `--dest <path>` | No | `/mnt/@archive` | Cold storage subvolume. |
+| `--snapshots <path>` | No | `/mnt/@snapshots` | Snapshot repository for `archive-batch-*` snapshots. |
+| `--checksum`, `-c` | No | `false` | Compare file contents by checksum. |
+| `--clean-source` | No | `false` | After transfer, prompt to delete the source directory contents. |
+| `--dry-run`, `-n` | No | `false` | Preview files without modifying the destination. |
+| `--no-snapshot` | No | `false` | Do not create a read-only archive snapshot. |
+| `--help`, `-h` | No | — | Show usage. |
 
 ---
 
-## Restore Scripts
+## Restore Engines
 
 ### `bin/system-restore.sh`, `bin/home-restore.sh`, `bin/data-restore.sh`
 
-Restores files from backup subvolumes back to the target destination.
+Restore files from a backup subvolume or snapshot back to a destination.
 
 ```bash
-sudo ./bin/<script>.sh --source <path> --dest <path> [OPTIONS]
+sudo ./bin/<tier>-restore.sh --source <path> --dest <path> [OPTIONS]
 ```
 
 | Parameter | Required | Default | Description |
 |---|---|---|---|
-| `--source <path>` | Yes | — | Path to the backup or snapshot subvolume to restore from. Must not match destination ([INV-RESTORE-03]). |
-| `--dest <path>` | Yes | — | Destination path on system to restore into. Prohibited from targeting protected tiers (`@archive`, `@snapshots`). |
-| `--snapshots <path>` | Conditional | — | Path for creating an automatic pre-restore safety snapshot on the destination filesystem ([INV-RESTORE-01]). Required unless `--no-snapshot` is passed. |
-| `--no-snapshot` | Conditional | `false` | Explicitly bypasses safety snapshot creation ([INV-RESTORE-01]). Required if `--snapshots` is omitted. |
-| `--dry-run` | No | `false` | Preview files to be restored without writing changes to disk. |
-| `--help`, `-h` | No | — | Display usage information and exit. |
+| `--source <path>` | Yes | — | Backup subvolume or snapshot to restore from. Must not equal the destination ([INV-RESTORE-03]). |
+| `--dest <path>` | Yes | — | Destination path. Cannot target `@archive` or `@snapshots`. |
+| `--snapshots <path>` | Conditional | — | Path for a pre-restore safety snapshot on the destination filesystem ([INV-RESTORE-01]). Required unless `--no-snapshot` is passed. |
+| `--no-snapshot` | Conditional | `false` | Explicitly bypass pre-restore snapshot creation ([INV-RESTORE-01]). |
+| `--dry-run` | No | `false` | Preview files without writing changes. |
+| `--help`, `-h` | No | — | Show usage. |
 
-> **Safety Notice ([INV-RESTORE-01, INV-RESTORE-02])**: Non-dry-run restore requires typing exact uppercase `YES` to confirm. If `--snapshots` is provided but snapshot creation fails, the restore immediately terminates (Fail-Closed). Virtual filesystems and mountpoints (`/proc/*`, `/sys/*`, `/dev/*`, `/run/*`, `/tmp/*`, `/mnt/*`, `/media/*`) are automatically excluded during OS root restoration ([INV-RESTORE-03]).
+> **Safety**: Non-dry-run restore requires typing uppercase `YES` to confirm. If `--snapshots` is provided and snapshot creation fails, the restore aborts. Virtual filesystems and mountpoints (`/proc/*`, `/sys/*`, `/dev/*`, `/run/*`, `/tmp/*`, `/mnt/*`, `/media/*`) are excluded during system restore ([INV-RESTORE-03]).
 
 ---
 
-## Operational Tools (`tools/`)
+## Drive Lifecycle
 
 ### `tools/mountctl.sh`
 
-Subvolume-aware lifecycle controller for unlocking, mounting, and locking Time Machine drives.
+Unlocks LUKS, mounts the five standard subvolumes, and can unmount and close the container.
 
 ```bash
 sudo ./tools/mountctl.sh <command> [OPTIONS]
@@ -142,54 +156,13 @@ sudo ./tools/mountctl.sh <command> [OPTIONS]
 
 | Command | Key Options | Description |
 |---|---|---|
-| `mount` | `-d <dev> [-m <base>] [--level <1-22>]` | Unlocks LUKS and mounts all 5 subvolumes (`@system`, `@home`, `@data`, `@archive`, `@snapshots`) under base. |
-| `unmount` | `[-m <base>] [--no-close]` | Unmounts all subvolumes in reverse order and closes the LUKS container. |
-| `status` | `[-m <base>]` | Displays LUKS device state and mount points with storage usage. |
-
----
-
-### `tools/backup-all.sh`
-
-Orchestrated pipeline executing System, Home, and Data backups sequentially with a single confirmation.
-
-```bash
-sudo ./tools/backup-all.sh [-m <base>] [OPTIONS]
-```
-
-| Parameter | Default | Description |
-|---|---|---|
-| `-m, --base <path>` | `/mnt` | Base directory where backup subvolumes are mounted. |
-| `--snapshots <path>` | `<base>/@snapshots` | Directory for storing point-in-time snapshots. |
-| `--skip-system` | `false` | Exclude system root backup from run. |
-| `--skip-home` | `false` | Exclude user home backup from run. |
-| `--skip-data` | `false` | Exclude active data workspace backup from run. |
-| `-y, --yes` | `false` | Non-interactive execution mode. |
-
----
-
-### `tools/prune-snapshots.sh`
-
-Snapshot retention and pruning engine to prevent disk space exhaustion. Supports policy-based retention (`--keep`) and targeted pattern deletion.
-
-```bash
-sudo ./tools/prune-snapshots.sh [OPTIONS] [SNAPSHOT_OR_PATTERN...]
-```
-
-| Parameter | Default | Description |
-|---|---|---|
-| `-l, --list` | — | Display formatted table of all snapshots and exit. |
-| `[pattern...]` | — | Specific snapshot names or glob patterns to delete (e.g. `*1301*`). |
-| `-s, --snapshots <path>` | `/mnt/@snapshots` | Path to BTRFS snapshot repository. |
-| `-k, --keep <N>` | `10` | Number of most recent snapshots to preserve per tier. |
-| `-t, --tier <tier>` | `all` | Specific tier to prune (`system`, `home`, `data`, `archive`, or `all`). |
-| `--apply` | `false` | Live execution flag. Without this flag, script runs in safe **DRY-RUN** preview. |
-| `-y, --yes` | `false` | Skip confirmation prompt when `--apply` is enabled. |
-
----
+| `mount` | `-d <dev> [-m <base>] [-n <name>] [--level <1-22>]` | Unlocks LUKS and mounts `@system`, `@home`, `@data`, `@archive`, and `@snapshots` under the base. If an optional `@media` subvolume exists, it is mounted too. |
+| `unmount` | `[-m <base>] [-n <name>] [--no-close]` | Unmounts managed subvolumes in reverse order and closes the LUKS container. |
+| `status` | `[-m <base>] [-n <name>]` | Displays LUKS state, mount points, and per-subvolume usage. |
 
 ### `tools/format-btrfs-luks.sh`
 
-Production-grade external drive partitioner and subvolume provisioner.
+Creates a LUKS2 container, a BTRFS filesystem, and the five standard subvolumes.
 
 ```bash
 sudo ./tools/format-btrfs-luks.sh -d <device> [-n <luks_name>] [-l <label>]
@@ -197,15 +170,35 @@ sudo ./tools/format-btrfs-luks.sh -d <device> [-n <luks_name>] [-l <label>]
 
 | Parameter | Default | Description |
 |---|---|---|
-| `-d, --device <dev>` | Required | Target block device to format. Refuses mounted or system-critical drives. |
-| `-n, --name <name>` | `backup_crypt` | LUKS device mapper container name. |
-| `-l, --label <label>` | `TimeMachine` | BTRFS filesystem volume label. |
+| `-d, --device <dev>` | Required | Target block device. Refuses mounted or system-critical drives. |
+| `-n, --name <name>` | `backup_crypt` | LUKS mapper name. |
+| `-l, --label <label>` | `TimeMachine` | BTRFS filesystem label. |
 
 ---
 
+## Maintenance
+
+### `tools/prune-snapshots.sh`
+
+Lists, retains, or deletes snapshots. Without `--apply`, it only previews changes.
+
+```bash
+sudo ./tools/prune-snapshots.sh [OPTIONS] [SNAPSHOT_OR_PATTERN...]
+```
+
+| Parameter | Default | Description |
+|---|---|---|
+| `-l, --list` | — | List snapshots and exit. |
+| `[pattern...]` | — | Snapshot names or glob patterns to delete (e.g. `*1301*`). |
+| `-s, --snapshots <path>` | `/mnt/@snapshots` | Snapshot repository. |
+| `-k, --keep <N>` | `10` | Number of newest snapshots to keep per tier. |
+| `-t, --tier <tier>` | `all` | Tier to prune: `system`, `home`, `data`, `archive`, or `all`. |
+| `--apply` | `false` | Actually delete matching snapshots. |
+| `-y, --yes` | `false` | Skip confirmation when `--apply` is used. |
+
 ### `tools/balance-btrfs.sh`
 
-Reclaims locked unallocated BTRFS chunks by consolidating under-utilized block groups via filtered thresholds.
+Consolidates under-utilized BTRFS block groups with filtered balance operations.
 
 ```bash
 sudo ./tools/balance-btrfs.sh [OPTIONS] [MOUNT_PATH]
@@ -214,15 +207,13 @@ sudo ./tools/balance-btrfs.sh [OPTIONS] [MOUNT_PATH]
 | Parameter | Default | Description |
 |---|---|---|
 | `MOUNT_PATH` | `/mnt` | BTRFS mountpoint to balance. |
-| `--quick` | — | Fast pass consolidating chunks with <10% utilization (takes seconds). |
-| `--normal` | Selected | Balanced consolidation for chunks with <50% data / <30% metadata utilization. |
-| `--deep` | — | Aggressive consolidation for chunks with <75% data / <50% metadata utilization. |
-
----
+| `--quick` | — | Reclaim chunks with <10% utilization. |
+| `--normal` | Selected | Consolidate chunks with <50% utilization. |
+| `--deep` | — | Consolidate chunks with <75% utilization. |
 
 ### `tools/cleanup-excluded.sh`
 
-Removes legacy files that were previously backed up but now match exclusion patterns.
+Removes files that were backed up before an ignore rule was added. Without `--execute`, it only previews matches.
 
 ```bash
 sudo ./tools/cleanup-excluded.sh [OPTIONS]
@@ -230,19 +221,19 @@ sudo ./tools/cleanup-excluded.sh [OPTIONS]
 
 | Parameter | Description |
 |---|---|
-| `-t, --tier <tier>` | Preset tier shortcut (`system`, `home`, `data`). Auto-deduces paths. |
+| `-t, --tier <tier>` | Preset tier (`system`, `home`, `data`) for destination and config paths. |
 | `-m, --base <path>` | Base mount path when using `--tier` (default: `/mnt`). |
-| `--dest <path>` | Explicit destination directory to clean. |
-| `--config <path>` | Explicit exclude rules configuration file. |
-| `--execute` | Permanently deletes matching files (default: safe preview). |
+| `--dest <path>` | Explicit destination directory. |
+| `--config <path>` | Explicit ignore configuration file. |
+| `--execute` | Delete matching files. |
 
 ---
 
 ## Exit Codes
 
-All CLI scripts adhere to standard POSIX exit status conventions:
+All scripts use standard POSIX exit statuses:
 
 | Exit Code | Meaning |
 |---|---|
-| `0` | Success / Operation completed cleanly. |
-| `1` | General error (missing parameters, missing tools, permission denied, user cancellation). |
+| `0` | Success, or a dry-run/list operation completed. |
+| `1` | General error: missing parameters, missing tools, permission denied, failed operation, or user cancellation. |

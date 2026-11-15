@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# format-btrfs-luks.sh - Production-grade LUKS2 + BTRFS multi-subvolume disk initializer
+# format-btrfs-luks.sh - LUKS2 + BTRFS multi-subvolume disk initializer
 # Formats an external drive with LUKS2 encryption and creates standard Time Machine subvolumes.
 
 set -euo pipefail
@@ -188,5 +188,5 @@ echo
 echo -e "${BOLD}${GREEN}✔ Disk setup completed successfully!${NC}"
 echo
 echo -e "${BOLD}Next Step - Mount All Subvolumes with:${NC}"
-echo -e "  sudo tools/mountctl.sh mount -d $DEVICE -m /mnt"
+echo -e "  sudo ./tools/mountctl.sh mount -d $DEVICE -m /mnt"
 echo

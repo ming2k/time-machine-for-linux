@@ -37,7 +37,7 @@ test_check_directory() {
 test_get_absolute_path() {
     # Test relative path
     local result=$(get_absolute_path ".")
-    if [ "$result" != "$(pwd)" ]; then
+    if [ "$result" != "$(pwd -P)" ]; then
         echo "FAIL: Current directory path mismatch"
         return 1
     fi

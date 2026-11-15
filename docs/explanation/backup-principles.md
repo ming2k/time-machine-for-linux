@@ -107,5 +107,5 @@ identical with* gitignore:
 - Keep patterns **anchored and specific**; broad basename patterns
   (`build/`, `cache/`) surprise you years later.
 - After editing, verify with `--dry-run` to preview the transfer list.
-- **Autonomous Self-Healing**: Active mirror tiers (`@system`, `@home`, `@data`) operate under `--delete --delete-excluded --force`. When ignore rules expand, the live mirror automatically purges newly excluded items to maintain strict fidelity with your active configuration, while prior states remain permanently protected in immutable BTRFS snapshots (`@snapshots`).
+- **Autonomous Self-Healing**: Active mirror tiers (`@system`, `@home`, `@data`) operate under `--delete --delete-excluded --force`. When ignore rules expand, the live mirror automatically purges newly excluded items to maintain strict fidelity with your active configuration, while prior states remain available in read-only BTRFS snapshots (`@snapshots`).
 - See [ADR-0002](../adr/0002-self-healing-mirror-reconciliation.md) for full architectural rationale.

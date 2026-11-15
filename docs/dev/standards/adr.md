@@ -50,7 +50,7 @@ negative_knowledge: true
 
 ---
 
-## 3. Authoritative ADR Template
+## 3. ADR Template
 
 ```markdown
 ---

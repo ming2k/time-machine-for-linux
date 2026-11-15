@@ -1,6 +1,6 @@
 # Time Machine Engineering Standards
 
-This directory defines the authoritative engineering, architectural, and quality standards for the `time-machine-for-linux` project.
+This directory defines the engineering, architectural, and quality standards for the `time-machine-for-linux` project.
 
 Rather than adopting external meta-frameworks or creating disconnected governance silos, the project maintains a **flat, high-cohesion, practical, and code-aligned standards suite directly inside `docs/dev/standards/`**.
 

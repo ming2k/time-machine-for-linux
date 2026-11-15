@@ -26,15 +26,15 @@ Modern Linux workstations often segregate high-speed I/O workloads across multip
  ├── @home       (User home mirror)
  ├── @data       (Workspace mirror)
  ├── @archive    (Append-Only cold sediment)
- ├── @media      (Independent media library)
- └── @snapshots  (Immutable point-in-time BTRFS snapshots)
+ ├── @media      (Optional independent media library)
+ └── @snapshots  (Read-only point-in-time BTRFS snapshots)
 ```
 
 ---
 
 ## 2. Why Segregate into Independent Backup Tiers?
 
-Traditional backup solutions often dump `/` as a monolithic blob. This creates critical operational problems:
+Traditional backup solutions often dump `/` as a monolithic blob. This creates operational problems:
 
 1. **Distro Upgrades & Switches**: When switching Linux distributions (e.g. from Ubuntu to Arch), you want to restore only `/home` (dotfiles, browser profiles, keys) without restoring outdated distro binaries from `/`.
 2. **Disaster Recovery**: If an OS update breaks bootloader or libc, you want to restore `@system` cleanly without overwriting active ongoing work on `/data`.
@@ -58,23 +58,23 @@ Pure `btrfs send | btrfs receive` requires identical filesystem roots and cannot
 ### The Hybrid Solution
 1. **Rsync as the Intelligent Filter**:
    Rsync reads fine-grained ignore rules (`--exclude-from`), evaluates file modifications, and synchronizes only genuine state changes to a live subvolume (`@system`, `@home`, `@data`).
-2. **BTRFS as the Instant Time-Machine**:
-   Once rsync finishes, BTRFS takes an instant Copy-on-Write subvolume snapshot (`btrfs subvolume snapshot`). The snapshot takes milliseconds, consumes zero initial disk space, and locks the exact state in time.
+2. **BTRFS as the Snapshot Layer**:
+   Once rsync finishes, BTRFS creates a subvolume snapshot (`btrfs subvolume snapshot`). The snapshot is a metadata operation: it initially shares data blocks with the source, and later writes to either subvolume consume additional space.
 
 ---
 
 ## 4. Mirroring vs. Cold Archiving (Append-Only)
 
-A critical distinction exists between **Mirror Syncing** and **Archiving**:
+A distinction exists between **Mirror Syncing** and **Archiving**:
 
 | Characteristic | Mirror Tiers (`@system`, `@home`, `@data`) | Cold Archive Tier (`@archive`) |
 |---|---|---|
-| **Synchronization** | Mirror mode (`--delete` enabled). | **Append-Only** (never deletes destination files). |
+| **Synchronization** | Mirror mode (`--delete` enabled). | **Append-Only** (no `--delete`; destination files may still be modified manually). |
 | **Source Lifecycle** | Source remains active on the machine. | Source is often deleted locally after verified archive. |
 | **History Mechanism** | History preserved via `@snapshots` tree. | History preserved directly in `@archive` + read-only snapshots. |
 | **Verification** | Fast mtime & size comparisons. | Optional cryptographic `--checksum` content checks. |
 
-This architectural boundary guarantees that when you delete an old 100GB finished project from `/data` to reclaim internal NVMe space, the external `@archive` copy remains permanently safe.
+Because archive synchronization never passes `--delete`, deleting an old finished project from `/data` does not remove its copy from `@archive`. This is a synchronization policy, not an immutable-storage guarantee: a user with write access can still modify the archive.
 
 ---
 
@@ -86,5 +86,5 @@ If placed in normal directories, these gigabyte-heavy files would unintentionall
 
 To solve this, the architecture establishes a dedicated **Safehouse Zone** (`/data/scratch` or `/data/media`):
 - **Ignored by Contract**: Strictly excluded in `config/data-backup-ignore` and `config/home-backup-ignore`.
-- **Zero Backup Footprint**: `tm backup` skips it unconditionally.
-- **Instant BTRFS Destruction**: Built as a dedicated BTRFS subvolume on `/data`, allowing hundreds of gigabytes of disposable clutter to be wiped atomically in 0.1 seconds without filesystem fragmentation.
+- **Zero Backup Footprint**: `bin/backup-all.sh` and the data backup engine skip it by configuration.
+- **Fast Cleanup**: If it is a dedicated BTRFS subvolume on `/data`, it can be deleted and recreated without a recursive `rm -rf` traversal.

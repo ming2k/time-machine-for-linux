@@ -6,13 +6,13 @@ This guide shows how to safeguard your primary development disk (`/data` — con
 
 ## 1. Backing Up Active Workspaces
 
-### Recommended Method: Unified CLI
+### Run the Data Backup
 ```bash
-# Back up /data to @data subvolume on mounted drive
-sudo tm backup --data
+# Back up /data to @data and snapshot into @snapshots
+sudo ./bin/data-backup.sh --source /data --dest /mnt/@data --snapshots /mnt/@snapshots
 ```
 
-*(Underlying engine: `sudo ./bin/data-backup.sh --source /data --dest /mnt/@data --snapshots /mnt/@snapshots`)*
+`--source /data` is the default, so it can be omitted.
 
 * **Intelligent Pruning**: Heavy compilation outputs and disposable package trees (`node_modules/`, `target/`, `build/`, `.venv/`, `.pytest_cache/`) are ignored via `config/data-backup-ignore`.
 * **Snapshot Point**: A timestamped BTRFS snapshot (`data-backup-YYYYMMDDHHMMSS`) is created on `/mnt/@snapshots` after synchronization.
@@ -30,7 +30,7 @@ If the secondary data drive suffers catastrophic hardware failure and is replace
    ```
 2. Restore all project repositories:
    ```bash
-   sudo tm restore data \
+   sudo ./bin/data-restore.sh \
      --source /mnt/@data \
      --dest /data \
      --no-snapshot
@@ -38,9 +38,9 @@ If the secondary data drive suffers catastrophic hardware failure and is replace
 
 ---
 
-## 3. Instant Rollback of a Single Project from Snapshot
+## 3. Restore a Single Project from Snapshot
 
-If you accidentally delete or destroy a project under `/data/projects/my-app`, you don't need a full restore. Retrieve it instantly from a snapshot:
+If you accidentally delete or destroy a project under `/data/projects/my-app`, you don't need a full restore. Copy it back from a snapshot:
 
 ```bash
 # 1. Locate the snapshot containing your desired state
@@ -61,11 +61,10 @@ Place files directly in `/data/scratch/` (or `/data/media/`):
 ```bash
 cp /mnt/@media/movie.mkv /data/scratch/
 ```
-`tm backup` automatically ignores this entire tree. Your backup drive will not be filled with disposable media.
+The `@data` backup rules ignore this entire tree, so disposable media does not fill your backup drive. `@media` is an optional subvolume; if it does not exist, use any local source path instead.
 
-### 2. Instant Wiping via BTRFS
-When done, you can instantly wipe hundreds of gigabytes in 0.1 seconds without slow `rm -rf` recursion:
+### 2. Wiping via BTRFS
+If `/data/scratch` is a dedicated BTRFS subvolume, you can delete and recreate it without a recursive `rm -rf`:
 ```bash
-# Recreate the subvolume in milliseconds
 btrfs subvolume delete /data/scratch && btrfs subvolume create /data/scratch
 ```

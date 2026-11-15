@@ -1,19 +1,17 @@
 # How to Format and Prepare an Encrypted BTRFS Backup Drive
 
-This guide explains how to format an external storage device using LUKS encryption and create the 5 required BTRFS subvolumes.
+This guide explains how to format an external storage device using LUKS encryption and create the 5 standard BTRFS subvolumes. `@media` is optional and is not created by the script.
 
 ---
 
 ## 1. Automated Setup (Recommended)
 
-Use the authoritative CLI command:
+Use the formatting script:
 
 ```bash
 # WARNING: All existing data on the device will be destroyed!
-sudo tm format -d /dev/sdX
+sudo ./tools/format-btrfs-luks.sh -d /dev/sdX
 ```
-
-*(Underlying engine: `sudo ./tools/format-btrfs-luks.sh -d /dev/sdX`)*
 
 The command performs the following automatically:
 1. Validates the device is a valid block device and ensures it is not mounted on critical system paths (`/`, `/home`, `/data`).
@@ -27,7 +25,7 @@ The command performs the following automatically:
    - `@data`: Active development workspace backups
    - `@archive`: Cold storage append-only sediment
    - `@snapshots`: BTRFS timestamped historical rollback snapshots
-7. Closes and locks the device cleanly, printing the recommended `sudo tm mount /dev/sdX` command.
+7. Closes and locks the device cleanly, printing the recommended `sudo ./tools/mountctl.sh mount -d /dev/sdX` command.
 
 ---
 

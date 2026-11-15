@@ -1,23 +1,20 @@
 # How to Back Up and Restore the Operating System
 
-This guide covers operating system backup using `tm backup --system` (engine: `bin/system-backup.sh`) and disaster recovery using `tm restore system` (engine: `bin/system-restore.sh`), including recovery from a Live USB environment.
+This guide covers operating system backup using `bin/system-backup.sh` and disaster recovery using `bin/system-restore.sh`, including recovery from a Live USB environment.
 
 ---
 
 ## 1. Operating System Backup
 
-The system backup captures installed packages, boot configuration, services, and system binaries under `/`, while strictly excluding `/home/` and `/data/`.
+The system backup captures system files, `/etc` configuration, services, and package databases under `/`, while excluding `/home/` and `/data/`.
 
-### Recommended Method: Unified CLI
+### Run the System Backup
 ```bash
-# Run system backup against mounted drive (default /mnt)
-sudo tm backup --system
-
-# Specify custom mount base if needed
-sudo tm backup --system -m /mnt
+# Back up / into /mnt/@system and snapshot into /mnt/@snapshots
+sudo ./bin/system-backup.sh --source / --dest /mnt/@system --snapshots /mnt/@snapshots
 ```
 
-*(Underlying engine: `sudo ./bin/system-backup.sh --source / --dest /mnt/@system --snapshots /mnt/@snapshots`)*
+`--source /` is the default, so it can be omitted. If the backup disk is mounted elsewhere, pass the corresponding `--dest` and `--snapshots` paths.
 
 ### Preflight Checks
 Before copying files, the engine checks:
@@ -35,16 +32,16 @@ If your system is functional but specific binaries or `/etc` configuration got c
 
 ### Step 1: Preview with Dry Run
 ```bash
-sudo tm restore system --source /mnt/@system --dest / --dry-run
+sudo ./bin/system-restore.sh --source /mnt/@system --dest / --dry-run
 ```
 
 ### Step 2: Execute Restore
 ```bash
 # If your destination is on a BTRFS filesystem with local snapshot subvolume (e.g. /.snapshots):
-sudo tm restore system --source /mnt/@system --dest / --snapshots /.snapshots
+sudo ./bin/system-restore.sh --source /mnt/@system --dest / --snapshots /.snapshots
 
 # If restoring across disks or without local BTRFS snapshots:
-sudo tm restore system --source /mnt/@system --dest / --no-snapshot
+sudo ./bin/system-restore.sh --source /mnt/@system --dest / --no-snapshot
 ```
 
 * **Fail-Closed Safety [INV-RESTORE-01]**: Under ADR-0003, if `--snapshots` is specified, snapshot creation MUST succeed on the destination filesystem; otherwise, the restore immediately aborts to prevent unshielded overwrites.

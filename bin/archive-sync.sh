@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Cold Data Archive Script (Append-Only & Defensive Dual-Staging)
-# Safely synchronizes completed projects, media, or datasets to cold storage.
-# Principle: NEVER DELETE at destination (Append-Only). Optional checksum verification.
-# Defensive Feature: Autodiscovers both /data/archive and /home/*/archive staging exits.
+# Cold Data Archive Script (Append-Only, Dual-Staging)
+# Synchronizes completed projects, media, or datasets to cold storage.
+# Principle: no --delete at the destination (append-only). Optional checksum verification.
+# Autodiscovers both /data/archive and /home/*/archive staging paths.
 
 # Get project paths
 SCRIPT_PATH="$(readlink -f "$0")"
@@ -26,7 +26,7 @@ usage() {
     echo
     echo -e "${BOLD}Description:${NC}"
     echo " Synchronizes cold data to long-term storage under an APPEND-ONLY policy."
-    echo " By default, autodiscovers active staging exits (/data/archive and /home/*/archive)."
+    echo " By default, autodiscovers active staging paths (/data/archive and /home/*/archive)."
     echo
     echo -e "${BOLD}Parameters:${NC}"
     echo " --source <path>     : Explicit path to archive (default: autodiscovers /data/archive & /home/*/archive)"
@@ -34,20 +34,20 @@ usage() {
     echo " --snapshots <path>  : Path to snapshots subvolume (default: /mnt/@snapshots)"
     echo
     echo -e "${BOLD}Options:${NC}"
-    echo " --checksum, -c      : Compare file contents via checksum (guarantees bit-for-bit integrity)"
+    echo " --checksum, -c      : Compare file contents via checksum instead of size and mtime"
     echo " --clean-source      : Prompt to delete source files after verified transfer to free local disk space"
     echo " --dry-run, -n       : Preview files that would be transferred without modifying destination"
-    echo " --no-snapshot       : Do not create a read-only safety snapshot after transfer"
+    echo " --no-snapshot       : Do not create a read-only snapshot after transfer"
     echo " --help, -h          : Show this help message"
     echo
-    echo -e "${BOLD}Safety Guarantees:${NC}"
-    echo " • APPEND-ONLY: NEVER runs with --delete. Destination files are NEVER purged."
+    echo -e "${BOLD}Behavior:${NC}"
+    echo " • APPEND-ONLY: This script never passes --delete to rsync."
     echo " • METADATA PRESERVATION: Full -aAXH flags preserve permissions, ownership, timestamps, and ACLs."
-    echo " • READ-ONLY BTRFS SNAPSHOTS: Locks batch snapshots with 'btrfs subvolume snapshot -r'."
-    echo " • DUAL-STAGING DEFENSE: Protects against missed archives across /data and /home."
+    echo " • READ-ONLY BTRFS SNAPSHOTS: Creates batch snapshots with 'btrfs subvolume snapshot -r'."
+    echo " • DUAL STAGING: Checks both /data/archive and /home/*/archive."
     echo
     echo -e "${BOLD}Examples:${NC}"
-    echo " # Autodiscover and archive all staging exits (/data/archive + /home/*/archive)"
+    echo " # Autodiscover and archive all staging paths (/data/archive + /home/*/archive)"
     echo " sudo $0"
     echo
     echo " # Archive with checksum verification and reclaim local NVMe disk space"
@@ -149,7 +149,7 @@ discover_staging_exits() {
         out_exits+=("/data/archive")
     fi
 
-    # Candidate 2: Defensive home staging exits
+    # Candidate 2: Home staging paths
     for user_home in /home/*; do
         local candidate="${user_home}/archive"
         if [ -d "$candidate" ] && [ -n "$(ls -A "$candidate" 2>/dev/null)" ]; then
@@ -296,14 +296,14 @@ main() {
         fi
     done
 
-    # Create immutable read-only BTRFS snapshot of @archive
+    # Create a read-only BTRFS snapshot of @archive
     if [ "$CREATE_SNAPSHOT" = true ] && [ -n "$SNAPSHOT_PATH" ] && [ "$any_failed" = false ]; then
         if is_btrfs_subvolume "$SNAPSHOT_PATH" && is_btrfs_subvolume "$DEST_PATH"; then
             local snap_time
             snap_time=$(date +%Y%m%d%H%M%S)
             local snap_target="${SNAPSHOT_PATH%/}/archive-batch-${snap_time}"
             echo
-            log_msg "INFO" "Creating immutable read-only BTRFS snapshot: $snap_target"
+            log_msg "INFO" "Creating read-only BTRFS snapshot: $snap_target"
             if btrfs subvolume snapshot -r "$DEST_PATH" "$snap_target" >/dev/null 2>&1; then
                 log_msg "SUCCESS" "Read-only archive snapshot locked: $snap_target"
             else

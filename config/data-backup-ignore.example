@@ -47,7 +47,7 @@ models/cache/
 vms/instances/
 vms/images/*.tmp
 
-# ------------------------------------------------ tier 2/3: cold archives (managed via tm archive)
+# ------------------------------------------------ tier 2/3: cold archives (managed via bin/archive-sync.sh)
 archive/
 
 # ------------------------------------------------ tier 5: unbacked scratchpad & safehouse zones

@@ -1,22 +1,22 @@
 # Subsystem Architecture & Topology Blueprint
 
 - Status: Living Blueprint
-- Last Updated: 2026-10-31
-- Scope: workspace/topology, architecture/subsystems, storage/btrfs, cli/tm
+- Last Updated: 2026-11-15
+- Scope: workspace/topology, architecture/subsystems, storage/btrfs, cli/commands
 - Maintainers: Time Machine Maintainers & Core Contributors
 
 ---
 
 ## 1. System Overview & Monorepo Topology
 
-**Time Machine for Linux** provides Apple Time Machine-like tiered backup, instant Copy-on-Write snapshots, and immutable cold archiving for modern Linux workstations.
+**Time Machine for Linux** provides Apple Time Machine-like tiered backup, Copy-on-Write snapshots, and append-only cold archiving for modern Linux workstations.
 
 The repository is structured into clear functional boundaries:
 
 ```text
 time-machine-for-linux/
-├── bin/                       # Primary public CLI & Tiered execution engines
-│   ├── tm                     # Single authoritative public CLI entrypoint [INV-CLI-01]
+├── bin/                       # Backup, archive, and restore commands
+│   ├── backup-all.sh          # Full multi-tier backup orchestrator [INV-CLI-02, 03]
 │   ├── system-backup.sh       # OS root backup engine
 │   ├── system-restore.sh      # OS root restore engine
 │   ├── home-backup.sh         # User home config backup engine
@@ -27,7 +27,6 @@ time-machine-for-linux/
 ├── tools/                     # Drive lifecycle & maintenance tools
 │   ├── mountctl.sh            # LUKS container unlock & multi-subvolume mounting
 │   ├── format-btrfs-luks.sh   # LUKS2 formatting & 5 BTRFS subvolumes creation
-│   ├── backup-all.sh          # Multi-tier pipeline orchestrator [INV-CLI-02, 03]
 │   ├── prune-snapshots.sh     # Policy retention & dirty snapshot purging
 │   ├── balance-btrfs.sh       # Safe filtered BTRFS chunk consolidation
 │   └── cleanup-excluded.sh    # Prune paths matching updated ignore rules
@@ -39,7 +38,7 @@ time-machine-for-linux/
 │   ├── backup/                # Backup executors, safety snapshotting, display formatting
 │   ├── restore/               # Restore executors, pre-restore snapshots, display formatting
 │   └── utils/                 # Preflight checks, confirmation prompts, rsync options
-├── config/                    # Battle-tested ignore templates
+├── config/                    # Default ignore templates
 │   ├── system-backup-ignore.example
 │   ├── home-backup-ignore.example
 │   └── data-backup-ignore.example
@@ -74,8 +73,9 @@ Storage is divided into 4 independent operational tiers across hardware media:
   ├── @system     <── bin/system-backup.sh (Mirror sync + safety snapshots)
   ├── @home       <── bin/home-backup.sh   (Mirror sync + safety snapshots)
   ├── @data       <── bin/data-backup.sh   (Mirror sync + safety snapshots)
-  ├── @archive    <── bin/archive-sync.sh  (Append-only + bitstream checksums)
-  └── @snapshots  <── Point-in-time immutable BTRFS rollback snapshots
+  ├── @archive    <── bin/archive-sync.sh  (Append-only + optional checksums)
+  ├── @media      <── Optional media library, not created by format
+  └── @snapshots  <── Read-only point-in-time BTRFS snapshots
 ```
 
 ### Subvolume Roles
@@ -85,21 +85,23 @@ Storage is divided into 4 independent operational tiers across hardware media:
 | `@system` | `/mnt/@system` | OS Root (`/`) mirror | Rsync mirror (`--delete --delete-excluded --force`) | Overwritten to reflect live source state |
 | `@home` | `/mnt/@home` | User home (`/home`) mirror | Rsync mirror (`--delete --delete-excluded --force`) | Overwritten to reflect live source state |
 | `@data` | `/mnt/@data` | Workspaces (`/data`) mirror | Rsync mirror (`--delete --delete-excluded --force`) | Overwritten to reflect live source state |
-| `@archive` | `/mnt/@archive` | Long-term cold data | Append-Only (NO `--delete`, NO `--force`) | **Never deleted**; permanent retention |
-| `@snapshots` | `/mnt/@snapshots` | Rollback history | BTRFS Read-Only snapshots | Managed via retention policy (`tm prune`) |
+| `@archive` | `/mnt/@archive` | Long-term cold data | Append-Only (NO `--delete`, NO `--force`) | Not deleted by archive sync; manual deletion is still possible |
+| `@snapshots` | `/mnt/@snapshots` | Rollback history | BTRFS read-only snapshots | Managed via retention policy (`tools/prune-snapshots.sh`) |
+| `@media` | `/mnt/@media` | Optional media library | Manually managed | Not created by `format`; mounted only if present |
 
 ---
 
 ## 3. Subsystem Boundaries & Interaction Flow
 
-### 1. Front-Controller Layer (`bin/tm`)
-- **Authority**: The sole public interface advertised in documentation ([INV-CLI-01]).
-- **Behavior**: Parses subcommands (`backup`, `archive`, `restore`, `mount`, `unmount`, `status`, `snapshots`, `prune`, `balance`, `cleanup`, `format`), validates arguments, and dispatches to underlying engines.
-- **Default Semantics**: Invoking `tm backup` with zero tier flags defaults to executing System + Home + Data sequentially with a single consolidated prompt ([INV-CLI-02], [INV-CLI-03]).
+### 1. Backup Orchestration (`bin/backup-all.sh`)
+- **Authority**: The documented command for a full backup run ([INV-CLI-02], [INV-CLI-03]).
+- **Behavior**: Runs System, Home, and Data engines sequentially, prints one execution plan, and asks for one confirmation.
+- **Default Semantics**: Invoking it with no skip flags runs all three active tiers. `--skip-system`, `--skip-home`, and `--skip-data` scope the run.
+- **Single-tier commands**: `bin/system-backup.sh`, `bin/home-backup.sh`, and `bin/data-backup.sh` are public commands, not internal modules.
 
 ### 2. Execution Engine Layer (`bin/*`)
-- **Isolation**: Each tier script is runnable standalone if needed, but adheres to standard parameters (`--source`, `--dest`, `--snapshots`).
-- **Safety Snapshotting**: Before modifying the live destination subvolume, a pre-backup safety snapshot is created on `@snapshots`.
+- **Isolation**: Each tier script is runnable standalone and adheres to standard parameters (`--source`, `--dest`, `--snapshots`).
+- **Snapshotting**: After a successful backup, a read-only snapshot is created on `@snapshots`. The snapshot records the post-sync state; it is not a pre-backup rollback point.
 - **Exit Code Propagation**: Engines exit with code 0 on success, and non-zero on preflight failure or rsync errors.
 
 ### 3. Drive Lifecycle Layer (`tools/*`)
@@ -119,9 +121,10 @@ Storage is divided into 4 independent operational tiers across hardware media:
 
 | ID | Title | Summary & Enforcement | Ratifying ADR |
 | :--- | :--- | :--- | :--- |
-| `[INV-CLI-01]` | Single Public Interface | All documentation and workflows use `bin/tm`. Underlying scripts are engines. | [ADR-0001](../adr/0001-unified-cli-architecture.md) |
-| `[INV-CLI-02]` | Backup-All Default | `tm backup` without tier flags executes System, Home, and Data sequentially. | [ADR-0001](../adr/0001-unified-cli-architecture.md) |
-| `[INV-CLI-03]` | Single Confirmation | Consolidated multi-tier runs present one execution plan with exactly 1 confirmation. | [ADR-0001](../adr/0001-unified-cli-architecture.md) |
+| `[INV-CLI-02]` | Backup-All Default | `bin/backup-all.sh` without tier flags executes System, Home, and Data sequentially. | [ADR-0001](../adr/0001-unified-cli-architecture.md), [ADR-0004](../adr/0004-remove-unified-cli-facade.md) |
+| `[INV-CLI-03]` | Single Confirmation | Multi-tier backup runs present one execution plan with exactly one confirmation. | [ADR-0001](../adr/0001-unified-cli-architecture.md), [ADR-0004](../adr/0004-remove-unified-cli-facade.md) |
 | `[INV-BACKUP-01]` | Mirror Fidelity | Active tiers use `--delete --delete-excluded --force` to prevent symlink and cache deadlocks. | [ADR-0002](../adr/0002-self-healing-mirror-reconciliation.md) |
-| `[INV-BACKUP-02]` | Snapshot Shield | Destructive mirror synchronization is safe because immutable BTRFS snapshots protect history. | [ADR-0002](../adr/0002-self-healing-mirror-reconciliation.md) |
-| `[INV-BACKUP-03]` | Cold Archive Prohibition | Destructive flags are strictly forbidden on `@archive`. Cold storage is Append-Only. | [ADR-0002](../adr/0002-self-healing-mirror-reconciliation.md) |
+| `[INV-BACKUP-02]` | Snapshot Shield | Destructive mirror synchronization is safe because read-only BTRFS snapshots preserve history. | [ADR-0002](../adr/0002-self-healing-mirror-reconciliation.md) |
+| `[INV-BACKUP-03]` | Cold Archive Prohibition | Destructive flags are strictly forbidden on `@archive`. Cold storage is append-only. | [ADR-0002](../adr/0002-self-healing-mirror-reconciliation.md) |
+
+> `[INV-CLI-01]` (single public interface through `bin/tm`) was retired by [ADR-0004](../adr/0004-remove-unified-cli-facade.md).

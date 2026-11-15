@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# backup-all.sh - Unified Orchestrator for All Backup Tiers
+# backup-all.sh - Full Backup Orchestrator
 # Executes System, Home, and Data backups sequentially with unified preflight and reporting.
 
 set -euo pipefail
@@ -123,7 +123,7 @@ check_mount "$SNAPSHOT_DIR" "@snapshots"
 if [[ $MISSING_MOUNTS -gt 0 ]]; then
     echo
     echo -e "${RED}[ERROR]${NC} Required backup subvolumes are not mounted."
-    echo -e "Mount them first with: ${BOLD}sudo tools/mountctl.sh mount -d <device> -m $BASE_DIR${NC}"
+    echo -e "Mount them first with: ${BOLD}sudo ./tools/mountctl.sh mount -d <device> -m $BASE_DIR${NC}"
     exit 1
 fi
 

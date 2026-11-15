@@ -1,6 +1,6 @@
 # Getting Started with Time Machine for Linux
 
-This tutorial walks you through setting up a multi-tiered backup system from scratch. In about 15 minutes, you will prepare an external drive, configure backup tiers, perform your first backup, and inspect the resulting BTRFS snapshots.
+This tutorial walks through preparing an external drive, configuring backup tiers, running a first backup, and inspecting the resulting BTRFS snapshots.
 
 ---
 
@@ -21,7 +21,7 @@ You will configure a reliable 4-tier storage backup architecture:
   ├── @home               ──> User backup
   ├── @data               ──> Projects backup
   ├── @archive            ──> Cold storage (append-only)
-  └── @snapshots          ──> Instant rollback points
+  └── @snapshots          ──> Read-only rollback points
 ```
 
 ---
@@ -36,11 +36,11 @@ You will configure a reliable 4-tier storage backup architecture:
 
 ## 3. Step 1: Format External Drive with BTRFS & LUKS
 
-Use the unified CLI to encrypt the external disk with LUKS2 and establish all 5 standard subvolumes (`@system`, `@home`, `@data`, `@archive`, `@snapshots`):
+Encrypt the external disk with LUKS2 and create the 5 standard subvolumes (`@system`, `@home`, `@data`, `@archive`, `@snapshots`):
 
 ```bash
 # WARNING: This will format the specified drive. Replace /dev/sdX with your actual drive.
-sudo ./tm format -d /dev/sdX
+sudo ./tools/format-btrfs-luks.sh -d /dev/sdX
 ```
 
 Follow the prompts to enter your encryption passphrase. The tool formats the partition, establishes standard subvolumes, and locks the device.
@@ -52,12 +52,12 @@ Follow the prompts to enter your encryption passphrase. The tool formats the par
 Unlock the LUKS container and mount all subvolumes with zstd compression in one step:
 
 ```bash
-sudo ./tm mount /dev/sdX
+sudo ./tools/mountctl.sh mount -d /dev/sdX
 ```
 
 Inspect the mount status and subvolume disk utilization anytime:
 ```bash
-sudo ./tm status
+sudo ./tools/mountctl.sh status
 ```
 
 ---
@@ -81,19 +81,25 @@ The defaults automatically exclude disposable caches (`.cache/`, `node_modules/`
 Run all three active tiers (System + Home + Data) sequentially with a single consolidated confirmation prompt:
 
 ```bash
-sudo ./tm backup
+sudo ./bin/backup-all.sh
 ```
 
-*(Alternatively, you can target a specific tier: `sudo ./tm backup --data` or `sudo ./tm backup --home`)*
+To back up a single tier, call its engine directly:
+
+```bash
+sudo ./bin/system-backup.sh --dest /mnt/@system --snapshots /mnt/@snapshots
+sudo ./bin/home-backup.sh   --dest /mnt/@home   --snapshots /mnt/@snapshots
+sudo ./bin/data-backup.sh   --dest /mnt/@data   --snapshots /mnt/@snapshots
+```
 
 ---
 
 ## 7. Step 5: Verify Your Time Machine Snapshots
 
-Every successful run automatically takes an immutable BTRFS snapshot. Inspect your snapshot history:
+Every successful run creates a read-only BTRFS snapshot. Inspect your snapshot history:
 
 ```bash
-sudo ./tm snapshots
+sudo ./tools/prune-snapshots.sh --list
 ```
 
 Output displays snapshots tagged with tiers and human-readable timestamps:
@@ -111,10 +117,10 @@ Total: 3 snapshots
 
 ## 8. Step 6: Unmount and Lock Drive
 
-When your backup completes and you want to unplug your external drive, cleanly unmount all subvolumes and lock the LUKS container with a single command:
+When your backup completes and you want to unplug your external drive, cleanly unmount all subvolumes and lock the LUKS container:
 
 ```bash
-sudo ./tm unmount
+sudo ./tools/mountctl.sh unmount
 ```
 
 You now have a fully operational, multi-tiered BTRFS time machine!

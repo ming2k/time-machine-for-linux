@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   re-include inside an excluded directory)
 
 ### Changed
+- Removed the `bin/tm` router facade. `tools/backup-all.sh` moved to `bin/backup-all.sh`; backup, restore, archive, mount, and maintenance engines are now documented as direct commands ([ADR-0004](docs/adr/0004-remove-unified-cli-facade.md)).
+- Rewrote `README.md` and `README-zh.md` with a concise source-to-destination table, host/backup directory contract, and explicit limitations. Removed unverified claims such as "sub-millisecond" snapshots and "tamper-proof" archives.
+- Standardized the backup disk on 5 subvolumes (`@system`, `@home`, `@data`, `@archive`, `@snapshots`). `@media` is optional and is not created by `format-btrfs-luks.sh`.
 - Expanded `config/home-backup-ignore`: AI/session tool caches (codex, kimi-code,
   pnpm store, npm `_npx`, claude versions), flatpak Chrome/Firefox profile caches,
   rebuildable toolchains (`sdks/`, `applications/`, `vms/`), public datasets

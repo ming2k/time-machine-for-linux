@@ -1,16 +1,18 @@
 ---
 id: ADR-0001
 title: "Unified CLI Architecture (bin/tm)"
-status: accepted
+status: superseded
 date: 2026-09-24
 scope: cli/core
-superseded_by: null
+superseded_by: ADR-0004
 negative_knowledge: true
 ---
 
 # 0001. Unified CLI Architecture (`bin/tm`)
 
-- Status: Accepted
+> **Superseded by [ADR-0004](0004-remove-unified-cli-facade.md).** This record is retained as historical context.
+
+- Status: Superseded by ADR-0004
 - Date: 2026-09-24
 - Deciders: maintainer, AI architect
 - Scope: cli/core

@@ -76,7 +76,7 @@ tests/
 │       └── test_fs_utils.sh            # Absolute path resolution and path tests
 ├── integration/
 │   └── test_system_backup.sh           # End-to-end simulated system backup test
-└── run-tests.sh                        # Authoritative test orchestrator
+└── run-tests.sh                        # Test orchestrator
 ```
 
 ---

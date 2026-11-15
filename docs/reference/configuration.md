@@ -37,7 +37,7 @@ In standard `git`, a negated rule (`!file`) can re-include a file inside an alre
 To selectively keep a child path, exclude sibling subdirectories instead of the top-level parent.
 
 ### Autonomous Pruning of Excluded Files (`--delete-excluded`)
-Active mirror tiers (`tm backup`) automatically purge destination files matching current ignore patterns via `--delete-excluded --force`. This ensures that updating ignore rules immediately reclaims destination storage and prevents obsolete directories from deadlocking symlink updates. Prior versions remain accessible in `@snapshots`.
+Active mirror tiers (`bin/backup-all.sh` and the individual backup engines) purge destination files matching current ignore patterns via `--delete-excluded --force`. Updating an ignore rule therefore reclaims destination storage on the next run. Prior versions remain accessible in `@snapshots`.
 
 ---
 

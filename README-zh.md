@@ -1,127 +1,132 @@
 # Time Machine for Linux
 
-[English](README.md) | [简体中文](README-zh.md)
+用 rsync 把 Linux 工作站的 `/`、`/home`、`/data` 镜像到一块加密的 BTRFS 外部盘，并在每次同步后创建只读快照。冷数据写入 `@archive` 时不使用 `--delete`。
 
-> 类似于苹果 Time Machine 的 Linux 分层备份、即时写时复制（BTRFS Copy-on-Write）快照与不可变冷归档系统，基于 BTRFS 与 rsync 构建。
+## 备份内容
 
-Time Machine for Linux 将现代 Linux 工作站存储划分为清晰独立的层级：以亚毫秒级 BTRFS 快照完整保护操作系统状态、用户桌面配置与活跃开发工作区，同时针对长期冷数据提供严格的**仅追加（Append-Only，绝不删除）**归档语义。
+| 源 | 目标 | 行为 |
+|---|---|---|
+| `/` | `/mnt/@system` | rsync 镜像；删除目标端已不存在或已被排除的文件；排除 `/home`、`/data`、虚拟文件系统和可重建缓存 |
+| `/home` | `/mnt/@home` | rsync 镜像；符号链接保持为链接；默认排除大媒体目录 |
+| `/data` | `/mnt/@data` | rsync 镜像；排除 `archive/`、`scratch/`、`media/`、`safehouse/`、`no-backup/` 和构建产物 |
+| `/data/archive/`、`~/archive/` | `/mnt/@archive` | 只追加；不传 `--delete`；可选 checksum 校验；每批创建只读快照 |
+| — | `/mnt/@snapshots` | 存放 `system-backup-*`、`home-backup-*`、`data-backup-*`、`archive-batch-*` |
 
----
+`@system` 是文件级镜像，不是可启动镜像。`@archive` 的“只追加”是 rsync 行为，不是 WORM。快照和镜像在同一块盘上，不防磁盘故障。
 
-## 核心特性
+## 假定的目录结构
 
-- **独立多层级存储拓扑**：将存储严格划分为独立子卷（`@system`、`@home`、`@data`、`@archive`、`@snapshots`）。无需带入过时的根系统二进制文件，即可直接将个人用户配置完整恢复至全新发行的操作系统。
-- **杜绝垃圾缓存堆积**：经过严格验证的排除规则模板，在数据写入备份磁盘前自动剔除数以 GB 计的编译中间产物（`node_modules`、`target`、`.venv`、`.pytest_cache`）以及临时包管理器缓存。
-- **即时 BTRFS 快照**：利用 rsync 快速将变动同步至实时镜像子卷，随后由 BTRFS 在毫秒内创建只读写时复制快照锁定历史状态。
-- **仅追加冷数据归档**：将已完工项目和不常访问的巨型数据集安全迁出至外部冷存储，支持底层数据校验（Checksum），并享有**绝不删除**的物理级保护。
-- **统一 CLI 控制器 (`tm`)**：单一权威命令行入口，集中调度 LUKS 解密、挂载管理、全层级流水线备份、快照生命周期修剪以及 BTRFS 碎片回收。
-
----
-
-## 存储拓扑结构
+脚本不要求特定的发行版。要让分层恢复真正有意义，`/home` 和 `/data` 应当是独立的目录树或挂载点：
 
 ```text
-[本地工作站磁盘 (热 / 温数据)]
-  ├── NVMe 1 (热数据)  : / (操作系统根目录) + /home (用户配置与 dotfiles)
-  └── NVMe 2 (温数据)  : /data (活跃项目代码与开发工作区)
-                             │
-                             │ 定期同步或手动归档
-                             ▼
-[外部存储驱动器 (加密 BTRFS 备份与冷存储)]
-  ├── @system       <── bin/system-backup.sh (镜像同步 + 安全快照)
-  ├── @home         <── bin/home-backup.sh   (镜像同步 + 安全快照)
-  ├── @data         <── bin/data-backup.sh   (镜像同步 + 安全快照)
-  ├── @archive      <── bin/archive-sync.sh  (仅追加 + 数据完整性校验)
-  └── @snapshots    <── 时间点不可变 BTRFS 回滚快照池
+/                       # 系统层：OS、/etc、/usr、/var（缓存、日志、容器、VM 镜像除外）
+├── /home               # 用户层：dotfiles 和应用配置（建议独立挂载）
+└── /data               # 数据层：活跃项目（建议独立挂载）
+    ├── projects/       # 由 @data 备份
+    ├── archive/        # 冷数据暂存；@data 排除，由 archive 命令写入 @archive
+    ├── scratch/        # 不备份
+    ├── media/          # 不备份
+    ├── safehouse/      # 不备份
+    └── no-backup/      # 不备份
 ```
 
----
+如果 `/home` 或 `/data` 只是 `/` 下的普通目录，备份仍能运行，但它们不是独立的恢复单元；`@system` 会显式排除这两个路径。`/home` 下的符号链接保持为链接，不会跟随进入 `/data`。
 
-## 快速上手
+备份盘默认挂载在 `/mnt`（可用 `-m` 改）：
 
-所有日常运维操作均由统一的 CLI 权威入口 `./tm`（或 `bin/tm`）接管。
-
-### 1. 初始化外部存储驱动器
-使用 LUKS2 加密外部硬盘并自动划分 5 个标准 BTRFS 子卷：
-```bash
-sudo ./tm format -d /dev/sdX
+```text
+/mnt/
+├── @system/            # / 的镜像
+├── @home/              # /home 的镜像
+├── @data/              # /data 的镜像
+├── @archive/           # 冷数据；只追加
+└── @snapshots/
+    ├── system-backup-YYYYMMDDHHMMSS/
+    ├── home-backup-YYYYMMDDHHMMSS/
+    ├── data-backup-YYYYMMDDHHMMSS/
+    └── archive-batch-YYYYMMDDHHMMSS/
 ```
 
-### 2. 一键挂载所有子卷
-解锁 LUKS 容器并使用 zstd 压缩挂载所有子卷：
-```bash
-sudo ./tm mount /dev/sdX
-```
+`@media` 是可选的第 6 个子卷。`format-btrfs-luks.sh` 不创建它；如果手动创建，`mountctl.sh` 会一并挂载。
 
-### 3. 配置忽略规则
-复制开箱即用的预设忽略规则模板：
+restore 的 `pre-restore-*` 快照写到 `--snapshots` 指定的路径；该路径通常在目标文件系统上（例如 `/home/.snapshots`），不一定位于 `/mnt/@snapshots`。
+
+## 快速开始
+
+依赖：Linux、`rsync`、`btrfs-progs`、`cryptsetup`，以及 root 权限。
+
 ```bash
+# 1. 用 LUKS2 + BTRFS 格式化外部盘（5 个标准子卷）
+sudo ./tools/format-btrfs-luks.sh -d /dev/sdX
+
+# 2. 解锁并挂载到 /mnt
+sudo ./tools/mountctl.sh mount -d /dev/sdX
+
+# 3. 从模板创建忽略规则
 cp config/system-backup-ignore.example config/system-backup-ignore
 cp config/home-backup-ignore.example config/home-backup-ignore
 cp config/data-backup-ignore.example config/data-backup-ignore
+
+# 4. 全量备份：System + Home + Data，单次确认
+sudo ./bin/backup-all.sh
+
+# 5. 归档冷数据（只追加），然后卸载
+sudo ./bin/archive-sync.sh --checksum --clean-source
+sudo ./tools/mountctl.sh unmount
 ```
 
-### 4. 执行备份
-**默认行为将顺序执行所有活跃层级**（System + Home + Data），并通过单次合并提示完成确认：
+单层备份：
+
 ```bash
-sudo ./tm backup
-```
-*(如需针对单个层级备份：`sudo ./tm backup --data`)*
-
-### 5. 归档冷数据与安全卸载
-```bash
-# 安全地将已完成项目归档至冷存储 (Append-Only，校验通过后自动清理本地空间)
-sudo ./tm archive /data/archive/ --checksum --clean-source
-
-# 逆序干净卸载所有子卷并关闭/锁定 LUKS 加密容器，随后可安全拔出硬盘
-sudo ./tm unmount
+sudo ./bin/system-backup.sh --dest /mnt/@system --snapshots /mnt/@snapshots
+sudo ./bin/home-backup.sh   --dest /mnt/@home   --snapshots /mnt/@snapshots
+sudo ./bin/data-backup.sh   --dest /mnt/@data   --snapshots /mnt/@snapshots
 ```
 
----
+## 常用命令
 
-## CLI 常用命令
+| 任务 | 命令 |
+|---|---|
+| 全量备份（所有层） | `sudo ./bin/backup-all.sh` |
+| 单层备份 | `sudo ./bin/<tier>-backup.sh --dest /mnt/@<tier> --snapshots /mnt/@snapshots` |
+| 冷数据归档 | `sudo ./bin/archive-sync.sh [--checksum] [--clean-source]` |
+| 恢复 | `sudo ./bin/<tier>-restore.sh --source ... --dest ...` |
+| 挂载 / 卸载 / 状态 | `sudo ./tools/mountctl.sh mount -d <dev>` / `unmount` / `status` |
+| 列出快照 | `sudo ./tools/prune-snapshots.sh --list` |
+| 修剪快照 | `sudo ./tools/prune-snapshots.sh [pattern] [-k N] [--apply]` |
+| BTRFS balance | `sudo ./tools/balance-btrfs.sh [path] [--quick]` |
+| 清理新排除的文件 | `sudo ./tools/cleanup-excluded.sh [-t <tier>] [--execute]` |
+| 格式化驱动器 | `sudo ./tools/format-btrfs-luks.sh -d <dev>` |
 
-| 命令 | 别名 | 常用参数 | 说明 |
-| :--- | :--- | :--- | :--- |
-| `tm backup` | `b` | `[--system] [--home] [--data] [-m <base>] [-y]` | **默认运行全部活跃层级**（系统 + 家目录 + 数据区），单次确认。可通过参数精细指定层级。 |
-| `tm archive` | `a` | `[source] [--checksum] [--clean-source]` | 仅追加（Append-Only）归档冷数据至 `@archive`，并自动生成不可变只读快照。 |
-| `tm restore` | `r` | `<system\|home\|data> --source <src> --dest <dst>` | 从备份镜像或历史快照中恢复文件。 |
-| `tm mount` | `m` | `<dev> [-m <base>]` | 解锁 LUKS 容器并使用 zstd 压缩挂载所有子卷。 |
-| `tm unmount` | `um` | `[-m <base>]` | 逆序干净卸载所有子卷并自动锁定 LUKS 容器。 |
-| `tm status` | `st` | `[-m <base>]` | 查看驱动器连接状态、LUKS 解密状态与各子卷空间占用。 |
-| `tm snapshots` | `snaps`| `[-s <path>]` | 格式化列出所有快照、所属层级及时间戳。 |
-| `tm prune` | `p` | `[pattern] [-k <N>] [--apply]` | 按保留策略或匹配模式清理过期/脏快照（**默认仅安全演练**，需 `--apply` 生效）。 |
-| `tm balance` | `bal` | `[path] [--quick]` | 执行带阈值过滤的安全 BTRFS Balance，回收稀疏块与未分配空间。 |
-| `tm cleanup` | `c` | `[-t <tier>] [--execute]` | 从备份目标中清理命中新忽略规则的历史残留文件。 |
-| `tm format` | `f` | `-d <dev>` | 使用 LUKS2 与 5 个标准子卷格式化初始化新驱动器。 |
+## 哪些内容不会被备份
 
----
+- `@system`：`/home`、`/data`、`/proc`、`/sys`、`/dev`、`/run`、`/tmp`、`/mnt`、`/media`、EFI、包管理器缓存、日志、容器和 VM 镜像，以及数据库数据目录。
+- `@home`：`downloads/`、`music/`、`videos/`、`books/`、`games/`、`Android/`、`sdks/`、`applications/`、`vms/` 等大目录或可重新下载的目录，以及缓存。
+- `@data`：`archive/`、`scratch/`、`media/`、`safehouse/`、`no-backup/`、`node_modules/`、`target/`、`.venv/`、`dist/` 等构建产物。
 
-## 相关文档
+完整列表见 `config/*-backup-ignore`。
 
-完整文档采用 [Diátaxis](https://diataxis.fr/) 架构进行体系化组织：
+## 限制
 
-- **[新手教程 (Tutorials)](docs/tutorials/index.md)**：带领新用户从零搭建完整环境：
-  - [从零快速上手 (Getting Started)](docs/tutorials/getting-started.md) — 15 分钟端到端完整实践。
-- **[操作指南 (How-To Guides)](docs/how-to/index.md)**：聚焦特定运维场景的任务指南：
-  - [日常端到端备份流程](docs/how-to/routine-backup-workflow.md) — 标准日常挂载、检查、备份与安全卸载全流程。
-  - [系统备份与灾难恢复](docs/how-to/system-backup-and-restore.md) — 根分区保护与 Live USB 环境灾难恢复。
-  - [用户家目录迁移](docs/how-to/home-backup-and-restore.md) — 配置文件备份与全新发行版无缝平移。
-  - [工作区数据恢复与回滚](docs/how-to/data-backup-and-restore.md) — 项目源码防护与单项目即时快照恢复。
-  - [冷数据安全归档](docs/how-to/archive-cold-data.md) — 双暂存区设计与仅追加冷存储。
-  - [加密驱动器初始化格式化](docs/how-to/format-btrfs-drive.md) — LUKS2 加密与标准子卷划分。
-  - [快照修剪与 BTRFS 空间均衡](docs/how-to/maintain-btrfs-and-prune-snapshots.md) — 保留策略与安全 chunk balance。
-- **[参考规范 (Reference)](docs/reference/index.md)**：精准的技术参数与配置规范：
-  - [CLI 命令行参考](docs/reference/cli.md) — 子命令全量参数、退出码及底层引擎脚本映射。
-  - [配置语法规范](docs/reference/configuration.md) — rsync 匹配规则与预设排除模板规范。
-- **[原理剖析 (Explanation)](docs/explanation/index.md)**：深入理解架构设计理念与技术选型：
-  - [存储拓扑与分层逻辑](docs/explanation/storage-architecture.md) — 子卷拆分理念与 rsync + 写时复制快照协同机制。
-  - [备份原则与反囤积法则](docs/explanation/backup-principles.md) — 可恢复性与不可替代性，清单优于拷贝。
-  - [预检检查机制设计](docs/explanation/preflight-checks.md) — 容量阈值、快照堆积与健康状态前置拦截。
-- **[子系统架构蓝图 (Subsystem Architecture)](docs/dev/subsystems.md)**：工程拓扑、模块职责与架构不变量约束。
-- **[架构决策记录 (ADR)](docs/adr/index.md)**：核心决策演进、权衡考量与否定知识记录。
+- `@system` 不是可启动镜像；bootloader 和 ESP 需要单独处理。
+- `@archive` 不会删除目标端文件，但有写权限的用户仍然可以修改或删除它们。它不是 WORM。
+- 快照和镜像在同一块盘上；重要数据应保留第二份异地副本。
+- `--clean-source` 会在归档后删除本地文件；默认关闭，并且会要求确认。
 
----
+## 文档
+
+- [从零快速上手](docs/tutorials/getting-started.md)
+- [日常备份流程](docs/how-to/routine-backup-workflow.md)
+- [系统备份与恢复](docs/how-to/system-backup-and-restore.md)
+- [家目录备份与恢复](docs/how-to/home-backup-and-restore.md)
+- [数据区备份与恢复](docs/how-to/data-backup-and-restore.md)
+- [冷数据归档](docs/how-to/archive-cold-data.md)
+- [格式化加密驱动器](docs/how-to/format-btrfs-drive.md)
+- [快照修剪与 BTRFS Balance](docs/how-to/maintain-btrfs-and-prune-snapshots.md)
+- [CLI 参考](docs/reference/cli.md)
+- [配置参考](docs/reference/configuration.md)
+- [存储架构](docs/explanation/storage-architecture.md)
+- [架构决策](docs/adr/index.md)
 
 ## 许可证
 

@@ -106,7 +106,7 @@ format_ts() {
 # Check directory
 if [[ ! -d "$SNAPSHOTS_DIR" ]]; then
     echo -e "${RED}[ERROR]${NC} Snapshots directory does not exist: $SNAPSHOTS_DIR" >&2
-    echo -e "Make sure the backup drive is mounted: ${BOLD}sudo ./tm mount /dev/sdX${NC}" >&2
+    echo -e "Make sure the backup drive is mounted: ${BOLD}sudo ./tools/mountctl.sh mount -d /dev/sdX${NC}" >&2
     exit 1
 fi
 

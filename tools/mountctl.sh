@@ -21,7 +21,9 @@ fi
 DEFAULT_BASE="/mnt"
 DEFAULT_LUKS_NAME="backup_crypt"
 DEFAULT_ZSTD_LEVEL=3
-STANDARD_SUBVOLUMES=("@system" "@home" "@data" "@archive" "@snapshots" "@media")
+STANDARD_SUBVOLUMES=("@system" "@home" "@data" "@archive" "@snapshots")
+OPTIONAL_SUBVOLUMES=("@media")
+ALL_SUBVOLUMES=("${STANDARD_SUBVOLUMES[@]}" "${OPTIONAL_SUBVOLUMES[@]}")
 
 log_msg() {
     local level="$1"
@@ -55,7 +57,8 @@ show_usage() {
 ${BOLD}Usage:${NC} $0 <command> [OPTIONS]
 
 ${BOLD}Commands:${NC}
-  mount                     Unlock LUKS and mount all Time Machine subvolumes
+  mount                     Unlock LUKS and mount the five standard subvolumes
+                            (plus @media if that optional subvolume exists)
   unmount, umount           Unmount all Time Machine subvolumes and close LUKS
   status                    Inspect LUKS and subvolume mount states
 
@@ -71,7 +74,7 @@ ${BOLD}Unmount Options:${NC}
   --no-close                Unmount filesystems but keep LUKS container open
 
 ${BOLD}Examples:${NC}
-  # Mount external backup drive (unlocks LUKS and mounts all 5 subvolumes to /mnt/@...)
+  # Mount external backup drive (unlocks LUKS and mounts the five standard subvolumes to /mnt/@...)
   sudo $0 mount -d /dev/sdb1
 
   # Check current mount status
@@ -142,6 +145,21 @@ cmd_mount() {
         fi
     done
 
+    # Optional subvolumes are mounted only when present; absence is not an error.
+    for subvol in "${OPTIONAL_SUBVOLUMES[@]}"; do
+        local target="${base_dir}/${subvol}"
+        mkdir -p "$target"
+
+        if findmnt -rn "$target" >/dev/null 2>&1; then
+            log_msg "INFO" "  $subvol is already mounted at $target"
+        elif mount -t btrfs -o "subvol=${subvol},${mount_opts}" "$mapper_path" "$target" 2>/dev/null; then
+            log_msg "SUCCESS" "  Mounted optional $subvol -> $target"
+        else
+            rmdir "$target" 2>/dev/null || true
+            log_msg "INFO" "  Optional $subvol not present; skipping"
+        fi
+    done
+
     echo
     log_msg "SUCCESS" "All available subvolumes mounted successfully under $base_dir"
 }
@@ -166,8 +184,8 @@ cmd_unmount() {
 
     # Reverse order unmount
     local unmounted_any=false
-    for (( i=${#STANDARD_SUBVOLUMES[@]}-1; i>=0; i-- )); do
-        local subvol="${STANDARD_SUBVOLUMES[i]}"
+    for (( i=${#ALL_SUBVOLUMES[@]}-1; i>=0; i-- )); do
+        local subvol="${ALL_SUBVOLUMES[i]}"
         local target="${base_dir}/${subvol}"
 
         if findmnt -rn "$target" >/dev/null 2>&1; then
@@ -241,6 +259,16 @@ cmd_status() {
             printf "  %-14s ${GREEN}%-20s${NC} %-12s %s\n" "$subvol" "MOUNTED" "$usage" "$target"
         else
             printf "  %-14s ${DIM}%-20s${NC} %-12s %s\n" "$subvol" "Not mounted" "-" "$target"
+        fi
+    done
+
+    # Show optional subvolumes only when they are actually mounted.
+    for subvol in "${OPTIONAL_SUBVOLUMES[@]}"; do
+        local target="${base_dir}/${subvol}"
+        if findmnt -rn "$target" >/dev/null 2>&1; then
+            local usage
+            usage=$(df -h "$target" 2>/dev/null | awk 'NR==2 {print $3 "/" $2}')
+            printf "  %-14s ${GREEN}%-20s${NC} %-12s %s\n" "$subvol" "MOUNTED" "$usage" "$target"
         fi
     done
     echo
