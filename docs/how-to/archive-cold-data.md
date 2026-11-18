@@ -18,7 +18,7 @@ The archive script looks at two locations:
 - **Primary staging (`/data/archive/`)**: the usual cold-data staging directory on the secondary drive.
 - **Home staging (`/home/*/archive/`)**: legacy or per-user archive directories.
 
-Both paths are excluded from routine daily backups (`bin/backup-all.sh`), so cold archives are not copied into the hot/warm mirrors.
+Both paths are excluded from routine tier backups (`config/data-backup-ignore` and `config/home-backup-ignore`), so cold archives are not copied into the hot/warm mirrors.
 
 ---
 

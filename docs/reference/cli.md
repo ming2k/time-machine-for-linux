@@ -10,7 +10,6 @@ All commands are run from the repository root and require root privileges unless
 
 | Task | Script | Key Options |
 |---|---|---|
-| Full backup (System + Home + Data) | `bin/backup-all.sh` | `[-m <base>] [--snapshots <path>] [--skip-system] [--skip-home] [--skip-data] [-y]` |
 | System backup | `bin/system-backup.sh` | `--dest <path> --snapshots <path> [--source <path>]` |
 | Home backup | `bin/home-backup.sh` | `--dest <path> --snapshots <path> [--source <path>]` |
 | Data backup | `bin/data-backup.sh` | `--dest <path> --snapshots <path> [--source <path>]` |
@@ -29,27 +28,15 @@ All commands are run from the repository root and require root privileges unless
 
 ## Backup Engines
 
-### `bin/backup-all.sh`
-
-Runs System, Home, and Data backups sequentially with one execution plan and one confirmation.
+Each tier has its own engine and its own confirmation prompt. There is no combined backup command: a full backup is the three engines run in sequence against the mounted backup disk.
 
 ```bash
-sudo ./bin/backup-all.sh [-m <base>] [OPTIONS]
+sudo ./bin/system-backup.sh --dest /mnt/@system --snapshots /mnt/@snapshots
+sudo ./bin/home-backup.sh   --dest /mnt/@home   --snapshots /mnt/@snapshots
+sudo ./bin/data-backup.sh   --dest /mnt/@data   --snapshots /mnt/@snapshots
 ```
 
-| Parameter | Default | Description |
-|---|---|---|
-| `-m, --base <path>` | `/mnt` | Base directory containing `@system`, `@home`, `@data`, and `@snapshots`. |
-| `--snapshots <path>` | `<base>/@snapshots` | Snapshot directory. |
-| `--source-system <path>` | `/` | System source. |
-| `--source-home <path>` | `/home` | Home source. |
-| `--source-data <path>` | `/data` | Data source. |
-| `--skip-system` | `false` | Skip the system tier. |
-| `--skip-home` | `false` | Skip the home tier. |
-| `--skip-data` | `false` | Skip the data tier. |
-| `-y, --yes` | `false` | Skip the confirmation prompt. |
-
-Before running, it verifies that the required destination subvolumes and the snapshot subvolume are mounted.
+Run them in one shell line with `&&` to stop at the first failing tier. Run independently, a failing tier does not stop the next command, so check each exit status before unmounting the drive.
 
 ### `bin/system-backup.sh`
 

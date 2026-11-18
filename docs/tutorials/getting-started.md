@@ -78,19 +78,15 @@ The defaults automatically exclude disposable caches (`.cache/`, `node_modules/`
 
 ## 6. Step 4: Perform Your First Full Backup
 
-Run all three active tiers (System + Home + Data) sequentially with a single consolidated confirmation prompt:
-
-```bash
-sudo ./bin/backup-all.sh
-```
-
-To back up a single tier, call its engine directly:
+Run the three tier engines in sequence for a full backup. Each engine asks for its own confirmation:
 
 ```bash
 sudo ./bin/system-backup.sh --dest /mnt/@system --snapshots /mnt/@snapshots
 sudo ./bin/home-backup.sh   --dest /mnt/@home   --snapshots /mnt/@snapshots
 sudo ./bin/data-backup.sh   --dest /mnt/@data   --snapshots /mnt/@snapshots
 ```
+
+To back up a single tier, run only its command.
 
 ---
 

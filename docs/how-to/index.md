@@ -8,7 +8,7 @@ Task-oriented runbooks for specific backup, restoration, archiving, and maintena
 
 | Guide | Solves | Primary Commands |
 | :--- | :--- | :--- |
-| **[Routine End-to-End Backup Workflow](routine-backup-workflow.md)** | Standard daily lifecycle: mount, preflight status inspection, backup execution, snapshot verification, and clean unmount. | `tools/mountctl.sh mount`, `bin/backup-all.sh`, `tools/mountctl.sh unmount` |
+| **[Routine End-to-End Backup Workflow](routine-backup-workflow.md)** | Standard daily lifecycle: mount, preflight status inspection, tier backups, snapshot verification, and clean unmount. | `tools/mountctl.sh mount`, `bin/system-backup.sh`, `bin/home-backup.sh`, `bin/data-backup.sh`, `tools/mountctl.sh unmount` |
 | **[System Backup & Disaster Recovery](system-backup-and-restore.md)** | Protect the operating system root and recover a non-booting machine from a Live USB environment. | `bin/system-backup.sh`, `bin/system-restore.sh` |
 | **[User Home Backup & Distro Migration](home-backup-and-restore.md)** | Back up personal user dotfiles and application states, and migrate configs onto a fresh Linux distribution install. | `bin/home-backup.sh`, `bin/home-restore.sh` |
 | **[Workspace Data Backup & Rollback](data-backup-and-restore.md)** | Safeguard active development source trees while stripping build artifacts (`node_modules`, `target`), and restore projects from snapshots. | `bin/data-backup.sh`, `bin/data-restore.sh` |

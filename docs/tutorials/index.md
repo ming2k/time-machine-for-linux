@@ -8,6 +8,6 @@ Step-by-step lessons that take you from a fresh checkout to a fully configured a
 
 | Tutorial | What you will do | Prerequisite |
 | :--- | :--- | :--- |
-| [Getting Started](getting-started.md) | Prepare an external disk with LUKS2 encryption and BTRFS subvolumes, configure ignore rules, execute your first multi-tier backup, and verify point-in-time snapshots. | Linux workstation with `rsync`, `btrfs-progs`, `cryptsetup`, and an external drive |
+| [Getting Started](getting-started.md) | Prepare an external disk with LUKS2 encryption and BTRFS subvolumes, configure ignore rules, run the tier backup engines, and verify point-in-time snapshots. | Linux workstation with `rsync`, `btrfs-progs`, `cryptsetup`, and an external drive |
 
 For a condensed command overview, consult the [README Quick Start](../../README.md#quickstart) or [CLI Reference](../reference/cli.md).

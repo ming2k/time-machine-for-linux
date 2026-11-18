@@ -15,6 +15,7 @@ negative_knowledge: true
 - Deciders: maintainer, AI architect
 - Scope: cli/core
 - Supersedes: [ADR-0001](0001-unified-cli-architecture.md)
+- Amended by: [ADR-0005](0005-remove-backup-all-orchestrator.md) (deletes `bin/backup-all.sh` and retires `[INV-CLI-02]`/`[INV-CLI-03]`; the `bin/tm` removal below still stands)
 
 ---
 
@@ -55,18 +56,20 @@ The facade therefore added a naming layer without providing a stable, enforced b
 
 Chosen option: **Option 2: Remove `bin/tm` and expose the engines directly.**
 
+> **Amended by [ADR-0005](0005-remove-backup-all-orchestrator.md).** The wrapper promotion below (`tools/backup-all.sh` → `bin/backup-all.sh`) was later reversed: that script is deleted, `[INV-CLI-02]`/`[INV-CLI-03]` are retired, and a full backup is the three tier engines run in sequence. The removal of `bin/tm` and the direct-command model still stand.
+
 - `bin/tm` is deleted.
-- `tools/backup-all.sh` moves to `bin/backup-all.sh` and remains the full-backup command: it runs System, Home, and Data sequentially with one confirmation.
+- `tools/backup-all.sh` moves to `bin/backup-all.sh` and remains the full-backup command: it runs System, Home, and Data sequentially with one confirmation. *(Deleted by [ADR-0005](0005-remove-backup-all-orchestrator.md).)*
 - Single-tier backups use `bin/system-backup.sh`, `bin/home-backup.sh`, and `bin/data-backup.sh` directly.
 - Archive, restore, drive lifecycle, and maintenance operations use their existing scripts in `bin/` and `tools/`.
 - The five standard subvolumes remain `@system`, `@home`, `@data`, `@archive`, and `@snapshots`. `@media` is optional and is not created by `tools/format-btrfs-luks.sh`.
-- `[INV-CLI-01]` is retired. `[INV-CLI-02]` and `[INV-CLI-03]` remain in force and are enforced by `bin/backup-all.sh`.
+- `[INV-CLI-01]` is retired. `[INV-CLI-02]` and `[INV-CLI-03]` remained in force under `bin/backup-all.sh` until they were retired with that script by [ADR-0005](0005-remove-backup-all-orchestrator.md).
 
 ### Invariants & Behavioral Boundaries
 
-- **`[INV-CLI-02] Backup-All Default Invariant`**:
+- **`[INV-CLI-02] Backup-All Default Invariant`** — *Retired by [ADR-0005](0005-remove-backup-all-orchestrator.md).*
   Invoking `bin/backup-all.sh` without tier-scoping flags MUST execute all three active tiers (System, Home, Data) sequentially.
-- **`[INV-CLI-03] Single Confirmation Invariant`**:
+- **`[INV-CLI-03] Single Confirmation Invariant`** — *Retired by [ADR-0005](0005-remove-backup-all-orchestrator.md).*
   Multi-tier backup runs MUST present a consolidated execution plan and prompt the user exactly once prior to starting the pipeline.
 - **`[INV-CLI-01] Single Public Interface Invariant`**:
   Retired. There is no router-level public interface; the engine scripts are the public commands.
@@ -76,7 +79,7 @@ Chosen option: **Option 2: Remove `bin/tm` and expose the engines directly.**
 ## Positive Consequences
 
 - Every documented command maps directly to a script that performs the operation.
-- The full-backup default and confirmation logic live in the same script that runs the tiers.
+- The full-backup default and confirmation logic live in the same script that runs the tiers. *(Superseded: the wrapper was deleted by [ADR-0005](0005-remove-backup-all-orchestrator.md); each engine now owns its own confirmation.)*
 - Removing the router eliminates a class of argument-forwarding and help-text drift.
 - Users can copy a single engine command into a script or systemd unit without reverse-engineering a dispatcher.
 

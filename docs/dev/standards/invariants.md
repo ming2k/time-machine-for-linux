@@ -40,10 +40,10 @@ A rule may be elevated to a **System Invariant** if and only if it satisfies all
 
 The repository currently ratifies the following system invariants:
 
-### Backup Orchestration Subsystem (ADR-0001, ADR-0004)
-- **`[INV-CLI-01] Single Public Interface Invariant`** — *Retired by [ADR-0004](../../adr/0004-remove-unified-cli-facade.md).* The `bin/tm` router was removed; the backup engines and `bin/backup-all.sh` are the public commands.
-- **`[INV-CLI-02] Backup-All Default Invariant`**: Invoking `bin/backup-all.sh` without tier scoping flags MUST execute all three active tiers (System, Home, Data) sequentially.
-- **`[INV-CLI-03] Single Confirmation Invariant`**: Multi-tier backup runs MUST present a consolidated execution plan and prompt the user exactly once prior to starting the pipeline.
+### Backup Orchestration Subsystem (ADR-0001, ADR-0004, ADR-0005)
+- **`[INV-CLI-01] Single Public Interface Invariant`** — *Retired by [ADR-0004](../../adr/0004-remove-unified-cli-facade.md).* The `bin/tm` router was removed; the backup engines are the public commands.
+- **`[INV-CLI-02] Backup-All Default Invariant`** — *Retired by [ADR-0005](../../adr/0005-remove-backup-all-orchestrator.md).* `bin/backup-all.sh` was deleted; no command implies "run all tiers".
+- **`[INV-CLI-03] Single Confirmation Invariant`** — *Retired by [ADR-0005](../../adr/0005-remove-backup-all-orchestrator.md).* Confirmation is per engine run, not per multi-tier pipeline.
 
 ### Backup & Storage Subsystem (ADR-0002)
 - **`[INV-BACKUP-01] Mirror Fidelity Invariant`**: The active backup destination subvolumes (`@system`, `@home`, `@data`) must be exact point-in-time reflections of source state governed by active ignore rules (`--delete --delete-excluded --force`).

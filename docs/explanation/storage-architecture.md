@@ -86,5 +86,5 @@ If placed in normal directories, these gigabyte-heavy files would unintentionall
 
 To solve this, the architecture establishes a dedicated **Safehouse Zone** (`/data/scratch` or `/data/media`):
 - **Ignored by Contract**: Strictly excluded in `config/data-backup-ignore` and `config/home-backup-ignore`.
-- **Zero Backup Footprint**: `bin/backup-all.sh` and the data backup engine skip it by configuration.
+- **Zero Backup Footprint**: The data backup engine skips it by configuration (`config/data-backup-ignore` and `config/home-backup-ignore`).
 - **Fast Cleanup**: If it is a dedicated BTRFS subvolume on `/data`, it can be deleted and recreated without a recursive `rm -rf` traversal.

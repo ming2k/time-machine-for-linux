@@ -15,12 +15,10 @@ sudo ./tools/mountctl.sh mount -d /dev/sdX1
 # 2. Check mount and capacity status
 sudo ./tools/mountctl.sh status
 
-# 3. Run backup
-sudo ./bin/backup-all.sh        # Full backup (System + Home + Data)
-
-# ...or run one tier at a time:
+# 3. Run backup (one tier at a time; all three = full backup)
 sudo ./bin/system-backup.sh --dest /mnt/@system --snapshots /mnt/@snapshots
 sudo ./bin/home-backup.sh   --dest /mnt/@home   --snapshots /mnt/@snapshots
+sudo ./bin/data-backup.sh   --dest /mnt/@data   --snapshots /mnt/@snapshots
 
 # 4. Verify snapshots
 sudo ./tools/prune-snapshots.sh --list
@@ -36,7 +34,7 @@ sudo ./tools/mountctl.sh unmount
 The standard operational lifecycle consists of six steps:
 
 ```text
-[Plug in Drive] ──> [mountctl mount] ──> [mountctl status] ──> [backup-all] ──> [mountctl unmount] ──> [Unplug]
+[Plug in Drive] ──> [mountctl mount] ──> [mountctl status] ──> [tier backups] ──> [mountctl unmount] ──> [Unplug]
 ```
 
 ### Step 1: Identify External Block Device
@@ -76,11 +74,14 @@ sudo ./tools/mountctl.sh status
 
 Choose the appropriate scope:
 
-#### Option A: Full Multi-Tier Backup (Recommended for Routine Use)
-Runs System, Home, and Data tiers sequentially with a single preflight confirmation:
+#### Option A: Full Backup — All Three Tiers (Recommended for Routine Use)
+There is no combined wrapper command. Run the three engines in sequence; each one confirms before it starts:
 ```bash
-sudo ./bin/backup-all.sh
+sudo ./bin/system-backup.sh --dest /mnt/@system --snapshots /mnt/@snapshots
+sudo ./bin/home-backup.sh   --dest /mnt/@home   --snapshots /mnt/@snapshots
+sudo ./bin/data-backup.sh   --dest /mnt/@data   --snapshots /mnt/@snapshots
 ```
+If a tier fails, fix it before running the next one. Chaining with `&&` stops the sequence at the first failure.
 
 #### Option B: System-Only Backup
 Captures packages, `/etc` configurations, and system binaries under `/` (excluding `/home` and `/data`):
