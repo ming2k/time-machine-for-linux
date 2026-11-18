@@ -192,15 +192,17 @@ sync_archive_source() {
     local start_time
     start_time=$(date +%s)
     local rsync_status=0
-    "${rsync_cmd[@]}" "$src_path/" "$target_dest/" || rsync_status=$?
+    rsync_summary_begin
+    "${rsync_cmd[@]}" "${RSYNC_SUMMARY_ARGS[@]}" "$src_path/" "$target_dest/" || rsync_status=$?
+    local duration=$(( $(date +%s) - start_time ))
+    print_rsync_summary "$RSYNC_SUMMARY_LOG" "$duration" archive
 
     if [ $rsync_status -ne 0 ] && [ $rsync_status -ne 24 ]; then
         log_msg "ERROR" "Archive transfer for $src_path encountered errors (exit: $rsync_status)"
         return 1
     fi
 
-    local duration=$(( $(date +%s) - start_time ))
-    log_msg "SUCCESS" "Archived $src_path in ${duration}s"
+    log_msg "SUCCESS" "Archived $src_path in $(format_duration "$duration")"
 
     # Optional: Clean source to free local space
     if [ "$CLEAN_SOURCE" = true ]; then

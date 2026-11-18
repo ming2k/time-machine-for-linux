@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   re-include inside an excluded directory)
 
 ### Changed
+- Backup and archive runs now end with a short, readable summary (new / updated / removed files, data copied, backup size, duration and average speed) instead of rsync's raw `--stats` block. Implemented in `lib/utils/rsync-utils.sh` (`print_rsync_summary`) by parsing an itemized rsync change log.
 - Removed `bin/backup-all.sh`. A full backup is now the three tier engines run in sequence (`system-backup.sh`, `home-backup.sh`, `data-backup.sh`), each with its own preflight checks and confirmation prompt. Retires `[INV-CLI-02]` and `[INV-CLI-03]` ([ADR-0005](docs/adr/0005-remove-backup-all-orchestrator.md)).
 - Removed the `bin/tm` router facade; backup, restore, archive, mount, and maintenance engines are now documented as direct commands ([ADR-0004](docs/adr/0004-remove-unified-cli-facade.md)).
 - Rewrote `README.md` and `README-zh.md` with a concise source-to-destination table, host/backup directory contract, and explicit limitations. Removed unverified claims such as "sub-millisecond" snapshots and "tamper-proof" archives.
