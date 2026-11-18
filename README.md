@@ -1,45 +1,111 @@
 # Time Machine for Linux
 
-Rsync-based tiered backups for Linux workstations. `/`, `/home`, and `/data` are mirrored to an encrypted BTRFS disk; each run creates a read-only snapshot. Cold data is copied to `@archive` without `--delete`.
+Back up a Linux workstation's system, home directory, and data area to an encrypted external BTRFS drive. Every run creates a read-only snapshot, so you can go back to the state of any previous backup. Cold data you no longer use day to day can be archived separately and stays on the backup drive even after you delete it locally.
+
+## Quickstart
+
+### 1. Install dependencies
+
+You need Linux, root privileges, and `git`, `rsync`, `btrfs-progs`, `cryptsetup`:
+
+```bash
+# Debian / Ubuntu
+sudo apt install git rsync btrfs-progs cryptsetup
+# Arch Linux
+sudo pacman -S git rsync btrfs-progs cryptsetup
+# Fedora
+sudo dnf install git rsync btrfs-progs cryptsetup
+```
+
+### 2. Get the code
+
+```bash
+git clone https://github.com/ming2k/time-machine-for-linux.git
+cd time-machine-for-linux
+```
+
+Nothing to build or install; run all following commands from this directory.
+
+### 3. Format the backup drive (first time only)
+
+> [!CAUTION]
+> This **erases the entire drive**. Check the device name with `lsblk` first and make sure it is not your system disk.
+
+```bash
+lsblk                                            # find the external drive, e.g. /dev/sdb
+sudo ./tools/format-btrfs-luks.sh -d /dev/sdX    # set an encryption passphrase and create the subvolumes
+```
+
+### 4. Create ignore rules (first time only)
+
+```bash
+cp config/system-backup-ignore.example config/system-backup-ignore
+cp config/home-backup-ignore.example   config/home-backup-ignore
+cp config/data-backup-ignore.example   config/data-backup-ignore
+```
+
+The templates ship with sensible defaults (caches, build artifacts, large media folders); edit them as needed.
+
+### 5. Run a backup
+
+Every backup is the same three steps: mount → back up → unmount.
+
+```bash
+# Unlock and mount the backup drive under /mnt
+sudo ./tools/mountctl.sh mount -d /dev/sdX
+
+# Back up each tier; every command asks for confirmation first
+sudo ./bin/system-backup.sh --dest /mnt/@system --snapshots /mnt/@snapshots
+sudo ./bin/home-backup.sh   --dest /mnt/@home   --snapshots /mnt/@snapshots
+sudo ./bin/data-backup.sh   --dest /mnt/@data   --snapshots /mnt/@snapshots
+
+# (Optional) archive cold data
+sudo ./bin/archive-sync.sh --checksum
+
+# Unmount; the drive can then be unplugged
+sudo ./tools/mountctl.sh unmount
+```
+
+To back up a single tier, run only the matching command. For a longer step-by-step walkthrough, see [Getting Started](docs/tutorials/getting-started.md).
 
 ## What gets backed up
 
-| Source | Destination | Behavior |
+| Local path | Backed up to | Notes |
 |---|---|---|
-| `/` | `/mnt/@system` | rsync mirror; removes destination files that no longer exist or are now excluded; excludes `/home`, `/data`, virtual filesystems, and rebuildable caches |
-| `/home` | `/mnt/@home` | rsync mirror; preserves symlinks as links; large media directories are excluded by default |
-| `/data` | `/mnt/@data` | rsync mirror; excludes `archive/`, `scratch/`, `media/`, `safehouse/`, `no-backup/`, and build artifacts |
-| `/data/archive/`, `~/archive/` | `/mnt/@archive` | append-only; no `--delete`; optional checksum verification; read-only snapshot per batch |
-| — | `/mnt/@snapshots` | stores `system-backup-*`, `home-backup-*`, `data-backup-*`, and `archive-batch-*` |
+| `/` | `/mnt/@system` | OS and configuration (`/etc`, `/usr`, `/var`, …); excludes `/home`, `/data`, caches, and logs |
+| `/home` | `/mnt/@home` | Dotfiles and app settings; skips downloads, music, videos, and other large folders by default |
+| `/data` | `/mnt/@data` | Active projects; skips `archive/`, `scratch/`, and similar folders plus build artifacts |
+| `/data/archive/`, `~/archive/` | `/mnt/@archive` | Cold-data archive: **add-only** — files you delete locally are kept on the backup drive |
+| — | `/mnt/@snapshots` | Read-only snapshots created automatically by every backup and archive run |
 
-`@system` is a file-level mirror, not a bootable image. `@archive` is append-only at the rsync level, not WORM. Snapshots live on the same disk as the mirrors and do not protect against disk failure.
+The first three tiers are **mirrors**: the backup matches your machine, so a file deleted locally is also removed from the mirror on the next run — but it can still be recovered from earlier snapshots.
 
-## Assumed directory layout
+## Directory layout
 
-The scripts do not require a specific distribution. Tiered restore only works well when `/home` and `/data` are separate trees or mount points:
+The scripts work on any distribution. `/home` and `/data` should ideally be separate partitions or mount points so they can be restored independently:
 
 ```text
-/                       # system tier: OS, /etc, /usr, /var (caches, logs, containers, VMs excluded)
-├── /home               # home tier: dotfiles and application configs (recommended separate mount)
-└── /data               # data tier: active projects (recommended separate mount)
-    ├── projects/       # backed up by @data
-    ├── archive/        # cold staging; excluded from @data, copied to @archive
-    ├── scratch/        # never backed up
-    ├── media/          # never backed up
-    ├── safehouse/      # never backed up
-    └── no-backup/      # never backed up
+/                       # system tier
+├── /home               # home tier (separate mount recommended)
+└── /data               # data tier (separate mount recommended)
+    ├── projects/       # backed up
+    ├── archive/        # cold-data staging; written to @archive by the archive command
+    ├── scratch/        # not backed up
+    ├── media/          # not backed up
+    ├── safehouse/      # not backed up
+    └── no-backup/      # not backed up
 ```
 
-If `/home` or `/data` is only a directory under `/`, backups still run, but they are not independent restore units; `@system` explicitly excludes both paths. Symlinks under `/home` are preserved as links and are not followed into `/data`.
+If `/home` or `/data` is just a directory under `/`, backups still work, but they cannot be restored as independent units. Symlinks under `/home` are backed up as links and are not followed into `/data`.
 
-The backup disk is mounted at `/mnt` by default (`-m` changes the base):
+The backup drive is mounted at `/mnt` by default (change with `-m`):
 
 ```text
 /mnt/
 ├── @system/            # mirror of /
 ├── @home/              # mirror of /home
 ├── @data/              # mirror of /data
-├── @archive/           # cold data; append-only
+├── @archive/           # cold-data archive
 └── @snapshots/
     ├── system-backup-YYYYMMDDHHMMSS/
     ├── home-backup-YYYYMMDDHHMMSS/
@@ -47,56 +113,23 @@ The backup disk is mounted at `/mnt` by default (`-m` changes the base):
     └── archive-batch-YYYYMMDDHHMMSS/
 ```
 
-`@media` is an optional sixth subvolume. `format-btrfs-luks.sh` does not create it; if you create it manually, `mountctl.sh` mounts it as well.
-
-Restore operations write their `pre-restore-*` snapshots to the `--snapshots` path you pass, which is usually on the destination filesystem (for example `/home/.snapshots`), not necessarily to `/mnt/@snapshots`.
-
-## Quickstart
-
-Requirements: Linux, `rsync`, `btrfs-progs`, `cryptsetup`, and root privileges.
-
-```bash
-# 1. Format an external drive with LUKS2 + BTRFS (5 subvolumes)
-sudo ./tools/format-btrfs-luks.sh -d /dev/sdX
-
-# 2. Unlock and mount everything under /mnt
-sudo ./tools/mountctl.sh mount -d /dev/sdX
-
-# 3. Create ignore configs from the templates
-cp config/system-backup-ignore.example config/system-backup-ignore
-cp config/home-backup-ignore.example config/home-backup-ignore
-cp config/data-backup-ignore.example config/data-backup-ignore
-
-# 4. Full backup: System + Home + Data, one confirmation
-sudo ./bin/backup-all.sh
-
-# 5. Archive cold data (append-only), then unmount
-sudo ./bin/archive-sync.sh --checksum --clean-source
-sudo ./tools/mountctl.sh unmount
-```
-
-Single-tier backups:
-
-```bash
-sudo ./bin/system-backup.sh --dest /mnt/@system --snapshots /mnt/@snapshots
-sudo ./bin/home-backup.sh   --dest /mnt/@home   --snapshots /mnt/@snapshots
-sudo ./bin/data-backup.sh   --dest /mnt/@data   --snapshots /mnt/@snapshots
-```
+For media files you can manually create an optional `@media` subvolume; `mountctl.sh` mounts it as well.
 
 ## Common commands
 
 | Task | Command |
 |---|---|
-| Full backup (all tiers) | `sudo ./bin/backup-all.sh` |
-| Single-tier backup | `sudo ./bin/<tier>-backup.sh --dest /mnt/@<tier> --snapshots /mnt/@snapshots` |
-| Cold archive | `sudo ./bin/archive-sync.sh [--checksum] [--clean-source]` |
-| Restore | `sudo ./bin/<tier>-restore.sh --source ... --dest ...` |
 | Mount / unmount / status | `sudo ./tools/mountctl.sh mount -d <dev>` / `unmount` / `status` |
+| Single-tier backup | `sudo ./bin/<tier>-backup.sh --dest /mnt/@<tier> --snapshots /mnt/@snapshots` |
+| Archive cold data | `sudo ./bin/archive-sync.sh [--checksum] [--clean-source]` |
+| Restore | `sudo ./bin/<tier>-restore.sh --source ... --dest ...` |
 | List snapshots | `sudo ./tools/prune-snapshots.sh --list` |
-| Prune snapshots | `sudo ./tools/prune-snapshots.sh [pattern] [-k N] [--apply]` |
+| Prune old snapshots | `sudo ./tools/prune-snapshots.sh [pattern] [-k N] [--apply]` |
 | BTRFS balance | `sudo ./tools/balance-btrfs.sh [path] [--quick]` |
 | Remove newly excluded files | `sudo ./tools/cleanup-excluded.sh [-t <tier>] [--execute]` |
-| Format drive | `sudo ./tools/format-btrfs-luks.sh -d <dev>` |
+| Format a backup drive | `sudo ./tools/format-btrfs-luks.sh -d <dev>` |
+
+`<tier>` is `system`, `home`, or `data`. Before restoring, a `pre-restore-*` snapshot is created automatically at the `--snapshots` path; see the restore guides for details.
 
 ## What is not backed up
 
@@ -106,12 +139,12 @@ sudo ./bin/data-backup.sh   --dest /mnt/@data   --snapshots /mnt/@snapshots
 
 The complete lists are in `config/*-backup-ignore`.
 
-## Limits
+## Caveats
 
-- `@system` is not a bootable image; bootloader and ESP are handled separately.
-- `@archive` does not delete destination files, but a user with write access can still modify or remove them. It is not WORM.
-- Snapshots and mirrors share one disk; keep a second off-site copy for disaster recovery.
-- `--clean-source` deletes local files after archiving; it is off by default and asks for confirmation.
+- `@system` is a file-level backup, not a bootable image; the bootloader and EFI partition must be handled separately.
+- `@archive` is add-only but not tamper-proof: anyone with write access can still modify or delete its files.
+- Snapshots and backups live on the same drive, so a drive failure loses both; keep a second off-site copy of important data.
+- `archive-sync.sh --clean-source` deletes the local originals after a successful archive; it is off by default and asks for confirmation.
 
 ## Documentation
 
